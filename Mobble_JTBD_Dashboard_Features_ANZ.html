@@ -1,0 +1,1590 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mobble: JTBD feature-level dashboard with ANZ competitors</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#fafaf7;--fg:#1c2420;--mut:#66706a;--card:#fff;--line:#e3e6e0;--mob:#0b7a4b;--frow:#f4f6f2}
+@media(prefers-color-scheme:dark){:root{--bg:#141815;--fg:#e8ece9;--mut:#9aa59e;--card:#1c211e;--line:#2c332f;--mob:#35c88a;--frow:#181d1a}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg);padding:20px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}p.s{color:var(--mut);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px}
+.ctl{display:flex;flex-wrap:wrap;gap:14px;align-items:end}.ctl label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+select,input,button{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}input[type=number]{width:80px}button{cursor:pointer}
+.cv{position:relative;height:380px}table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:center}td:first-child,th:first-child{text-align:left}
+.N{background:#1b9e6b33}.P{background:#e8a31740}.I{background:#3b82c438}.H{background:#9aa5a038}.G{background:#d9534f2e}.U{background:repeating-linear-gradient(45deg,#9aa5a01f 0 4px,transparent 4px 8px);color:var(--mut)}
+.mob{font-weight:700;color:var(--mob)}td.mobc{box-shadow:inset 2px 0 0 var(--mob),inset -2px 0 0 var(--mob)}
+.note{font-size:12.5px;color:var(--mut)}.pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;margin-right:4px}
+.tt{cursor:help}#tip{position:fixed;display:none;max-width:360px;background:#111;color:#f4f4f4;padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.4;z-index:9;pointer-events:none;box-shadow:0 4px 14px #0006;text-align:left}
+tr.jrow td{font-weight:600}tr.jrow td:first-child{cursor:pointer;white-space:nowrap}tr.jrow td:first-child .car{display:inline-block;width:14px;transition:none}
+tr.jrow.open td:first-child .car{transform:rotate(90deg)}
+tr.frow{display:none;background:var(--frow)}tr.frow.show{display:table-row}tr.frow td:first-child{padding-left:26px;font-weight:400}
+.jc{font-variant-numeric:tabular-nums}.mk{font-size:10px;margin-left:2px;opacity:.85}
+.legend span{margin-right:10px}th.anz{border-bottom:2px solid #6b8e23}th{vertical-align:bottom}
+</style></head><body>
+<h1>Mobble: feature-level JTBD comparison, with ANZ competitors</h1>
+<p class="s">63 features catalogued from vendor websites, help centres, blogs and release notes (Nov 2026), grouped under 18 farmer jobs. ANZ market scan adds P2P Agri, Livestock Library, FARMap, Resolution, Trev, Pasture.io to the original ten. Click a job to expand its features; hover any cell for the caveat. Annual costs in AUD ex GST (Phoenix list prices divided by 1.1; Atlas GST treatment not stated).</p>
+<div class="card"><div class="ctl">
+<label>Cohort<select id="coh"></select></label>
+<label>Feature Tier<select id="basis"><option value="high">High: full feature set / top tier</option><option value="mid" selected>Mid: typical tier</option><option value="low">Low: entry tier</option></select></label>
+<label>USD→AUD (1 USD =)<input id="fxu" type="number" step="0.01"></label>
+<label>NZD→AUD (1 NZD =)<input id="fxn" type="number" step="0.01"></label>
+<label>Halter (collar hardware)<select id="hal"><option value="0">Hide from charts</option><option value="1">Show</option></select></label>
+<label>"Not confirmable" counts as<select id="uval"><option value="0" selected>Gap (0)</option><option value="0.5">Partial (0.5)</option></select></label>
+</div><p class="note" id="desc" style="margin:8px 0 0"></p></div>
+<div class="card"><h2>1. Annual cost range by vendor (low to high, mid marked)</h2><div class="cv"><canvas id="c1"></canvas></div><p class="note cnote"></p></div>
+<div class="card"><h2>2. Cost vs value: where Mobble sits</h2><p class="note">Up and to the left is better value. Value = weighted share of the 18 jobs covered, where each job's score is the average of its features (native 1.0, paid 0.8, integration 0.6, partial 0.5, gap 0, not documented per the setting above).</p><div class="cv"><canvas id="c2"></canvas></div><p class="note cnote"></p></div>
+<div class="card"><h2>3. Mid-tier annual cost across all cohorts (log scale)</h2><div class="cv" style="height:420px"><canvas id="c3"></canvas></div><p class="note cnote"></p></div>
+<div class="card"><h2>4. Cost table for the selected cohort</h2><div id="tbl"></div></div>
+<div class="card"><h2>5. Jobs-to-be-done and feature coverage</h2>
+<div class="ctl" style="margin-bottom:8px"><button id="exp">Expand all</button><button id="col">Collapse all</button></div>
+<p class="note legend">Each feature earns points: <span class="pill N">N native = 1</span><span class="pill P">P paid tier, module or add-on = 0.8</span><span class="pill I">I integration = 0.6</span><span class="pill H">H partial = 0.5</span><span class="pill G">G gap = 0</span><span class="pill U">? not confirmable from public docs = 0 or 0.5 (toggle above)</span></p>
+<p class="note"><b>How a job % is worked out:</b> add up the points for the job's features and divide by the number of features. Every feature in a job counts equally. A job where every feature exists but sits on a paid tier scores 80%, and one where half the features are native and half are missing scores 50%. <b>$</b> marks a job with at least one paid-tier feature and <b>⇄</b> one with at least one integration. Hover a % to see which features are included, partial or missing, and where the points went. Jobs sorted by weight (5 to 1). Underlined column headers are ANZ additions; hover a header for the vendor summary.</p>
+<div id="mx" style="overflow:auto"></div></div>
+<div class="card"><h2>6. Sources browsed</h2><div id="src" class="note"></div></div>
+<script>
+// Round 2 evidence: help centres, blogs, release notes (browsed 9 Nov 2026).
+// Each entry: [featureIndex, vendor, newCode, caveat, sourceKey]
+const EVID = (function () {
+const SRC = {
+  mob_ind: 'https://www.mobble.io/help/individual-management',
+  mob_comp: 'https://www.mobble.io/help/using-mobble-for-lpa-record-keeping-and-audits',
+  mob_act: 'https://www.mobble.io/help/mob-and-paddock-actions',
+  mob_news: 'https://www.mobble.io/post (monthly news Mar to Nov 2026, Year in Review Apr 2026)',
+  aw_move: 'https://news.agriwebb.com/78064-planned-movements-on-the-farm-map',
+  aw_birth: 'https://help.agriwebb.com/en/articles/3710454-birth-records-iam',
+  at_help: 'https://help.grazing.atlasag.com/en (all 8 collections, about 45 articles)',
+  fq_blog: 'https://www.farmiq-farmax.co.nz/blog/post/171973/product-update-eids-on-mobile-tasks-and-a-bcs-graph/',
+  fq_help: 'https://help.farmiq.co.nz/search (Security roles, Gross margin calculators, Plan land applications, Organisation level users, Animal history, Mating report)',
+  br_help: 'https://cs.breedr.co/us_help_center (Maps, Apply Medicines, Medicine Cabinet, Ranch Management, User Access, Alerts)',
+  ha_rp: 'https://halterhq.com/rural-professionals',
+  ha_dairy: 'https://www.halterhq.com/en-au/dairy/pricing (heat detection listed for dairy packages only)',
+  hw_help: 'https://help.herdwatch.com/en (11 collections, about 220 articles)',
+  sb_kb: 'https://kb.outcrosssystems.com.au/portal/en/kb/stockbook (User Access, Multi treat, Vendor Declarations, Adding a New Database)',
+  px_help: 'https://help.agdata.com.au/phoenix/11 (664-topic table of contents)',
+  px_carc: 'https://www.agriculture-xprt.com/software/livestock-records-software-653163 (AGDATA carcase data feature)',
+  cm_help: 'https://help.cattlemax.com (articles 546 withdrawal, 134 roles, 133 multiple herds, 672 Ranchbot, 651 SenseHub)',
+  cm_app: 'https://cattlemax.com/app (TagMax offline sessions)',
+};
+const NF = 'Not found after checking the vendor site, help centre and blog. Likely absent; confirm in a demo.';
+const E = [
+  // Mobble
+  [10, 'mobble', 'G', 'Confirmed: Mobble\'s help centre says it is mob-based and "does not specifically cater for individual animal management such as EID or NLIS tag tracking". Workaround: a mob action with a count of 1 and the animal named in notes.', 'mob_ind'],
+  [11, 'mobble', 'G', 'Confirmed by the Individual Management help article. Mobble suggests keeping EID data in Excel and says it may partner with an EID system later.', 'mob_ind'],
+  [12, 'mobble', 'G', 'Mob history only (help centre confirms mob-based design).', 'mob_ind'],
+  [14, 'mobble', 'G', 'No weight records in help centre or release notes. An Optiweigh connection was "being scoped" in March 2026.', 'mob_news'],
+  [15, 'mobble', 'G', 'Optiweigh connection being scoped (Mobble News, March 2026); not released by November 2026.', 'mob_news'],
+  [21, 'mobble', 'G', 'No eNVD creation. NVDs and ASDs can be uploaded as files against sales (Files & Photos, 2026).', 'mob_news'],
+  [25, 'mobble', 'H', 'No plan builder. A biosecurity plan document can be stored under Property-Level Files, Compliance & Regulation (Feb 2026).', 'mob_news'],
+  [58, 'mobble', 'H', 'No structured joining record. Mob actions are free-form, so joining can be logged as a custom action with notes.', 'mob_act'],
+  [62, 'mobble', 'G', 'No carcass data. Kill sheets can be uploaded as files against sales.', 'mob_news'],
+  [20, 'mobble', 'N', 'Help article lists mob and paddock histories, inventories (batch, expiry, WHP, ESI), summaries and auditor access for LPA and NZFAP audits.', 'mob_comp'],
+  // AgriWebb
+  [13, 'agriwebb', 'H', 'Sire and dam links through birth and AI records (Individual Animal Management). No EBV or genomics features found.', 'aw_birth'],
+  [32, 'agriwebb', 'P', 'Movement Planning add-on (Compliance and Performance, via Marketplace): planned moves appear on the map and in the team task list with push notifications.', 'aw_move'],
+  [29, 'agriwebb', 'P', 'Rotational planner via the Movement Planning add-on (Compliance and Performance) or the Grazing Planning add-on (A$300/yr, Performance, adds FOO-driven grazing days).', 'aw_move'],
+  // Atlas
+  [5, 'atlas', 'N', 'Stockflow Reports (downloadable stock reconciliation).', 'at_help'],
+  [6, 'atlas', 'N', 'Birth, death, lost and found records.', 'at_help'],
+  [2, 'atlas', 'G', NF, 'at_help'],
+  [10, 'atlas', 'G', 'Stock groups and mobs only; no individual animal articles in the help centre.', 'at_help'],
+  [11, 'atlas', 'G', NF, 'at_help'],
+  [12, 'atlas', 'G', NF, 'at_help'],
+  [15, 'atlas', 'G', 'Weights and ratings are entered manually ("Record animal weight & rating"); no scale import.', 'at_help'],
+  [17, 'atlas', 'G', 'No treatment records in the help centre.', 'at_help'],
+  [18, 'atlas', 'G', NF, 'at_help'],
+  [19, 'atlas', 'G', 'Feed inventory only.', 'at_help'],
+  [20, 'atlas', 'G', 'No compliance articles; Stockflow reports could support an audit.', 'at_help'],
+  [21, 'atlas', 'G', NF, 'at_help'],
+  [22, 'atlas', 'G', NF, 'at_help'],
+  [23, 'atlas', 'G', NF, 'at_help'],
+  [24, 'atlas', 'G', NF, 'at_help'],
+  [25, 'atlas', 'G', NF, 'at_help'],
+  [38, 'atlas', 'G', 'No integrations documented.', 'at_help'],
+  [39, 'atlas', 'G', 'Manual rain gauges only.', 'at_help'],
+  [59, 'atlas', 'H', 'Reproductive state is tracked per stock group for forecasting; no pregnancy scanning record.', 'at_help'],
+  [33, 'atlas', 'N', 'Record feed estimates per paddock (single animal and step-out methods); Feed On Offer article.', 'at_help'],
+  // FarmIQ
+  [2, 'farmiq', 'G', NF, 'fq_help'],
+  [13, 'farmiq', 'H', 'Parentage and breed shown for EID animals; sire and dam in Animal history and Mating reports (Pro). No EBVs.', 'fq_blog'],
+  [32, 'farmiq', 'H', 'Stock rotation and spring rotation planner tools (Performance+); planned moves are not documented as becoming tasks.', 'fq_help'],
+  [34, 'farmiq', 'G', 'Satellite map background only; pasture covers come from plate meters or FARMAX.', 'fq_help'],
+  [45, 'farmiq', 'P', 'Planned cropping applications and gross margin calculators: Performance+ (NZ$190 per farm per month).', 'fq_help'],
+  [49, 'farmiq', 'P', 'Gross margin calculators: Performance+ (also in Grow with the Planning, assets and compliance add-on).', 'fq_help'],
+  [51, 'farmiq', 'H', 'Organisation-level users and map features across multiple farms; each farm still billed separately.', 'fq_help'],
+  [54, 'farmiq', 'N', 'Tasks with one or several locations, or a whole paddock; staff location sharing (Oct 2026 update).', 'fq_blog'],
+  [55, 'farmiq', 'N', 'Security roles for farm and organisation-level users.', 'fq_help'],
+  [29, 'farmiq', 'P', 'Stock rotations, spring rotation planner and feed planner tools: Performance+ (NZ$190 per farm per month).', 'fq_help'],
+  // Breedr
+  [0, 'breedr', 'N', 'Satellite field mapping on mobile with quick swipe to move animals in bulk.', 'br_help'],
+  [1, 'breedr', 'G', NF, 'br_help'],
+  [2, 'breedr', 'G', NF, 'br_help'],
+  [18, 'breedr', 'N', 'Withdrawal period in days entered with each medicine activity; batch, LOT and expiry held in the Medicine Cabinet.', 'br_help'],
+  [20, 'breedr', 'G', 'No AU help centre; the US help centre has no LPA content.', 'br_help'],
+  [21, 'breedr', 'G', 'No AU help centre; no eNVD content.', 'br_help'],
+  [22, 'breedr', 'G', NF, 'br_help'],
+  [23, 'breedr', 'G', 'No NLIS content; US help centre only.', 'br_help'],
+  [24, 'breedr', 'G', NF, 'br_help'],
+  [25, 'breedr', 'G', NF, 'br_help'],
+  [27, 'breedr', 'G', 'Maps cover fields and pens only.', 'br_help'],
+  [36, 'breedr', 'G', 'Medicine Cabinet only; no feed inventory.', 'br_help'],
+  [48, 'breedr', 'G', 'Integrations cover genetics, breed associations and hardware only.', 'br_help'],
+  [51, 'breedr', 'H', 'Multi-site accounts configured by Customer Success.', 'br_help'],
+  [50, 'breedr', 'H', 'Multi-site accounts configured by Customer Success; supply-chain moves between operations.', 'br_help'],
+  [53, 'breedr', 'H', 'Animal alerts with priority and date can be sent to other users; no general task list.', 'br_help'],
+  [55, 'breedr', 'H', 'Users get a role on one shared account, but every user sees the same records.', 'br_help'],
+  // Halter
+  [28, 'halter', 'N', 'Vets and farm consultants view a client farm\'s real-time data in the Halter app (Rural Professionals program and usage policy).', 'ha_rp'],
+  [58, 'halter', 'G', 'Heat detection and mating metrics are dairy package features; beef packages list no breeding tools.', 'ha_dairy'],
+  [50, 'halter', 'U', 'Help centre requires a customer login; not confirmable.', 'ha_rp'],
+  [51, 'halter', 'U', 'Help centre requires a customer login; not confirmable.', 'ha_rp'],
+  [55, 'halter', 'U', 'Help centre requires a customer login; not confirmable.', 'ha_rp'],
+  [57, 'halter', 'U', 'Help centre requires a customer login; not confirmable.', 'ha_rp'],
+  // Herdwatch
+  [2, 'herdwatch', 'G', NF, 'hw_help'],
+  [13, 'herdwatch', 'H', 'Stock bull and AI bull records; ICBF account link (Ireland). No EBV tools for AU.', 'hw_help'],
+  [16, 'herdwatch', 'N', 'Weight Insights and Predicted Weight.', 'hw_help'],
+  [25, 'herdwatch', 'H', 'Animal Health Plan for quality assurance audits (UK/IE schemes).', 'hw_help'],
+  [27, 'herdwatch', 'H', 'Points of interest on Pasture farm maps.', 'hw_help'],
+  [30, 'herdwatch', 'G', 'Pasture articles cover maps, grass covers, sprays, fertiliser and harvest; no rest targets.', 'hw_help'],
+  [31, 'herdwatch', 'G', NF, 'hw_help'],
+  [32, 'herdwatch', 'G', NF, 'hw_help'],
+  [33, 'herdwatch', 'P', 'Grass measurement, grass cover map and farm cover reports in Pasture by Herdwatch (priced as its own operation type).', 'hw_help'],
+  [34, 'herdwatch', 'G', NF, 'hw_help'],
+  [35, 'herdwatch', 'I', 'PastureBase Ireland integration (grass budgeting); Ireland only.', 'hw_help'],
+  [39, 'herdwatch', 'G', NF, 'hw_help'],
+  [42, 'herdwatch', 'P', 'Seed drilling and cultivation records in Pasture by Herdwatch.', 'hw_help'],
+  [43, 'herdwatch', 'P', 'Spraying (with sprayer setup) and fertiliser application records in Pasture by Herdwatch.', 'hw_help'],
+  [44, 'herdwatch', 'P', 'Harvesting records in Pasture by Herdwatch.', 'hw_help'],
+  [48, 'herdwatch', 'G', 'No accounting sync (Farmplan link is a data migration).', 'hw_help'],
+  [50, 'herdwatch', 'G', 'No multi-herd or multi-farm articles; accounts are set up per herd.', 'hw_help'],
+  [51, 'herdwatch', 'G', NF, 'hw_help'],
+  [53, 'herdwatch', 'H', 'Jobs and notes (with photos); reminders not described.', 'hw_help'],
+  [54, 'herdwatch', 'G', NF, 'hw_help'],
+  [55, 'herdwatch', 'H', 'Additional users can be added to a herd (PRO); role detail not described.', 'hw_help'],
+  [61, 'herdwatch', 'N', 'Buy & Sell by Herdwatch member marketplace and Mart Link (UK/IE).', 'hw_help'],
+  [62, 'herdwatch', 'N', 'Factory kill sheets can be sent to Herdwatch (UK/IE).', 'hw_help'],
+  // StockBook
+  [1, 'stockbook', 'G', NF, 'sb_kb'],
+  [2, 'stockbook', 'G', NF, 'sb_kb'],
+  [5, 'stockbook', 'G', NF, 'sb_kb'],
+  [17, 'stockbook', 'N', 'Multi-treat: record a treatment (product, rate, units) for selected animals.', 'sb_kb'],
+  [18, 'stockbook', 'G', 'Treatment setup has no WHP field in the KB article.', 'sb_kb'],
+  [19, 'stockbook', 'G', NF, 'sb_kb'],
+  [21, 'stockbook', 'G', 'Records the NVD number against a sale; no eNVD creation.', 'sb_kb'],
+  [22, 'stockbook', 'H', 'Vendor Declaration event ties all sold animals to one QA sale record with NVD and health statement numbers.', 'sb_kb'],
+  [25, 'stockbook', 'G', NF, 'sb_kb'],
+  [27, 'stockbook', 'G', 'No mapping.', 'sb_kb'],
+  [28, 'stockbook', 'H', 'User access groups can limit what a login sees; desktop install, so access needs the database or cloud sync.', 'sb_kb'],
+  [50, 'stockbook', 'H', 'Separate databases per enterprise under one client code; animals can be transferred between databases.', 'sb_kb'],
+  [51, 'stockbook', 'G', 'Databases are separate.', 'sb_kb'],
+  [55, 'stockbook', 'N', 'User Access groups with ticked permissions per area; administration group controls the rest.', 'sb_kb'],
+  // Phoenix
+  [2, 'phoenix', 'G', NF, 'px_help'],
+  [21, 'phoenix', 'G', 'No NVD or eNVD topic in the 664-topic help.', 'px_help'],
+  [22, 'phoenix', 'G', NF, 'px_help'],
+  [23, 'phoenix', 'N', '"Upload Data to Notify the NLIS Database", "Compare and Reconcile Against the NLIS Database" and "Download Purchased NLIS Devices" in the Livestock module.', 'px_help'],
+  [25, 'phoenix', 'G', NF, 'px_help'],
+  [28, 'phoenix', 'N', 'Guest access on Phoenix Live, a Consultant role, and third-party access keys through Phoenix Warehouse. Extra concurrent users still cost +A$63/month.', 'px_help'],
+  [55, 'phoenix', 'N', 'Six standard roles (Admin, Manager, Consultant, Data Entry, Financial Only, Production Only) and custom roles.', 'px_help'],
+  [62, 'phoenix', 'N', 'Import processor carcase CSV files, matched by RFID, with charts and summary reports (Livestock module).', 'px_carc'],
+  // CattleMax
+  [2, 'cattlemax', 'G', 'Pasture moves rotate whole groups; no connected-paddock grazing.', 'cm_help'],
+  [4, 'cattlemax', 'H', 'TagMax app records scale and RFID sessions offline; printable worksheets otherwise. The main app needs a connection.', 'cm_app'],
+  [18, 'cattlemax', 'N', 'Withdrawal days per treatment; Withdrawal tab in Herd Health and a notice on the animal record until it expires.', 'cm_help'],
+  [19, 'cattlemax', 'G', 'Preset treatments only; no medicine stock levels.', 'cm_help'],
+  [25, 'cattlemax', 'G', 'Ranch Verification Organizer compiles records for verification programs; no biosecurity plan.', 'cm_help'],
+  [38, 'cattlemax', 'I', 'Ranchbot (Farmbot\'s US brand) sensors shown on the Pastures map.', 'cm_help'],
+  [39, 'cattlemax', 'I', 'Ranchbot rain gauges can add rainfall automatically.', 'cm_help'],
+  [41, 'cattlemax', 'G', 'SenseHub link is a spreadsheet export for collar setup; no monitoring data comes back.', 'cm_help'],
+  [48, 'cattlemax', 'G', 'End of Year Organizer exports for tax; no accounting sync.', 'cm_help'],
+  [50, 'cattlemax', 'H', 'One account covers many pastures and owners (Smart Groups); separate enterprises or species need separate accounts, switchable from one login.', 'cm_help'],
+  [51, 'cattlemax', 'H', 'Smart Groups by owner, pasture or category within one account.', 'cm_help'],
+  [55, 'cattlemax', 'N', 'Role-based permissions in all editions: Administrator, Manager, Observer and others.', 'cm_help'],
+  [56, 'cattlemax', 'H', 'TagMax sessions work offline for device data; manual entry otherwise online.', 'cm_app'],
+  [62, 'cattlemax', 'G', NF, 'cm_help'],
+];
+return { SRC, E, NF };
+})();
+if (typeof module !== 'undefined') module.exports = EVID;
+
+;
+// Feature-level coverage catalogue. Vendor order: mobble, agriwebb, atlas, farmiq, breedr, halter, herdwatch, stockbook, phoenix, cattlemax
+// Codes: N native in base tier, P paid higher tier / module / add-on, I third-party integration, H partial, G gap (not offered), U not documented on public pages
+const FEAT = (function () {
+  const V = ['mobble', 'agriwebb', 'atlas', 'farmiq', 'breedr', 'halter', 'herdwatch', 'stockbook', 'phoenix', 'cattlemax'];
+  const BASE = {
+    mobble: 'Included in every Mobble plan (all features on all plans).',
+    agriwebb: 'Included from the Essentials tier.',
+    atlas: 'Included from the Core plan (from A$350/yr).',
+    farmiq: 'Included in every pack from Lite (NZ$42 per farm per month).',
+    breedr: 'Included from Basic membership (US$40/month, up to 400 animals).',
+    halter: 'Included in Beef Base (from about US$8 per collar per month).',
+    herdwatch: 'Included in the free Basic plan.',
+    stockbook: 'Included in Stockbook (Windows desktop software, cloud sync, Stockhand app).',
+    phoenix: 'Included in the Phoenix Livestock module (A$90/month Live or A$57/month Desktop, GST inc).',
+    cattlemax: 'Included in the Commercial plan (US$144 to US$960 a year by herd size).',
+  };
+  const DEF = {
+    N: v => BASE[v],
+    P: () => 'Needs a higher tier, paid module or add-on.',
+    I: () => 'Available through a third-party integration.',
+    H: () => 'Partial coverage.',
+    G: () => 'Not offered.',
+    U: () => 'Not documented on the vendor\'s public pages (checked Nov 2026). May exist; verify in a demo.',
+  };
+  const AW_C = 'Compliance tier (about 1.4x Essentials, e.g. A$1,673/yr at 1,000 cattle).';
+  const AW_P = 'Performance tier (about 1.8x Essentials, e.g. A$2,151/yr at 1,000 cattle).';
+  const FQ_E = 'Essentials pack (NZ$84 per farm per month).';
+  const FQ_P = 'Performance+ pack (NZ$190 per farm per month).';
+  const FQ_PRO = 'Pro pack (NZ$249 per farm per month).';
+  const AT_M = 'Management plan or above (from A$1,100/yr).';
+  const AT_P = 'Performance plan only (from A$1,500/yr).';
+  const HB_P = 'Beef Pro package (price via local rep, on top of collar subscription).';
+  const PX_CROP = 'Phoenix Cropping module: +A$23/month on Live as an extra module, +A$29 on Desktop, or A$90/month on its own (GST inc).';
+  const PX_MAP = 'Phoenix Mapping module: +A$23/month on Live as an extra module, +A$29 on Desktop (GST inc).';
+  const PX_FIN = 'Phoenix Financials module: Live Pro from A$90/month, Desktop Pro A$77, Desktop Lite A$57 (GST inc).';
+
+  const F = [
+    // 0 Record mob moves and paddock history
+    { j: 0, n: 'Drag-and-drop mob moves on a map', d: 'Move a mob between paddocks by dragging it on the farm map, on phone or web.', r: 'NNNPHNHHPN',
+      c: ['', '', 'Mob moves recorded in real time on the digital property map.', 'Mob movements between paddocks need ' + FQ_P, 'Groups, pastures and tags; a drag-and-drop map is not documented.', 'Moves are physical: collars shift the mob into the next virtual break remotely.', 'Records cattle moves; map-based moves sit in Pasture by Herdwatch (tier not stated).', 'Paddock movements recorded per animal in Stockbook and Stockhand; no farm map documented.', 'Paddock movements recorded in Livestock; the visual map needs ' + PX_MAP, 'Animals move between pastures shown on a real map.'] },
+    { j: 0, n: 'Automatic grazing history (days grazed and rested)', d: 'Paddock-level history that counts days grazed and days rested without manual calculation.', r: 'NNNPUPHUNH',
+      c: ['Automatic grazing counters for days grazed and rested per paddock.', 'Grazing History report and records (tier not stated on pricing page).', 'Graze chart (past, current, planned) and graze period and recovery trends in Core.', 'Paddock history from ' + FQ_E + ' Grazing by mob needs Performance+.', '', 'Rest period map and automated grazing records in ' + HB_P, 'Pasture by Herdwatch tracks grazing days (tier not stated).', '', 'Grazing Chart, Grazing Performance and Grazing Benchmark reports in the Livestock module.', 'Pasture records and per-pasture inventory; days rested not documented.'] },
+    { j: 0, n: 'Open gates / connected paddocks', d: 'Show a mob grazing across several connected paddocks at once.', r: 'NNUUUHUUUU',
+      c: ['"Open gates" records and visualises grazing across connected paddocks.', 'Connect paddocks with gates so stock can move between them.', '', '', '', 'Virtual breaks can be drawn across any area, so paddock boundaries matter less.', '', '', '', ''] },
+    { j: 0, n: 'Split and merge mobs during a move', d: 'Draft part of a mob off, or combine mobs, as part of recording a move.', r: 'NNNPNHHHNH',
+      c: ['Merge or split on confirming a move; adjust ages, classes and genders.', 'Standard in AgriWebb\'s move workflow (product knowledge; not named on the features page).', 'Mob and stock group management with bulk class changes.', 'Mob-based recording needs ' + FQ_P, 'Unlimited groups, pastures and tags.', 'Mobs can be split across breaks; drafting into new mobs not documented.', 'Groups supported; split during a move not documented.', 'Individual-animal system; group moves via Stockhand.', 'Mob and individual movements in the Livestock module.', 'Groups and pasture moves; split workflow not documented.'] },
+    { j: 0, n: 'Offline map and moves', d: 'Record moves and view the map with no mobile signal, syncing later.', r: 'NNNNNHNHNU',
+      c: ['Offline map access; offline records sync when back online.', 'Mobile app works offline; data export and print for offline use.', 'Offline records, mob moves and history.', 'Mobile and desktop apps work offline and online (all packs).', 'Herd inventory available offline.', 'Satellite-enabled app usage where supported; collars keep working without a phone.', 'Works offline at the crush or in the paddock.', 'Desktop data is local; Stockhand offline use not documented.', 'Phoenix Live app updates records with no internet or mobile service.', 'Offline use not mentioned on public pages.'] },
+
+    // 1 Stock reconciliation by mob
+    { j: 1, n: 'Opening-to-closing stock reconciliation report', d: 'Opening stock plus births and purchases less sales and deaths equals closing stock, by mob, class and property.', r: 'NNHPHGHUNH',
+      c: ['Livestock reconciliation report, across properties.', 'Livestock reconciliation report on Essentials.', 'Traceability "from purchase to sale"; a formal reconciliation report is not documented.', 'Stock reconciliation needs ' + FQ_P, 'Inventory management; reconciliation report not named.', '', 'Stock register; reconciliation report not named.', '', 'Livestock Summary report: opening plus purchases and births less sales and deaths, by class.', 'Inventory reports; reconciliation not named.'] },
+    { j: 1, n: 'Births and deaths (natural increase, casualties)', d: 'Log births, marking counts and losses so numbers stay right.', r: 'NNHPNGNNNN',
+      c: ['Natural increase and casualty records.', '', 'Implied by purchase-to-sale traceability; not itemised.', 'Births and deaths from ' + FQ_E, 'Calving recording.', '', 'Record births on the free plan.', 'Birth details and mothering up in Stockhand.', 'Births, deaths, missing, stolen and found.', 'Calving records.'] },
+    { j: 1, n: 'Sales and purchases', d: 'Record livestock sales and purchases with numbers, values and counterparties.', r: 'NNNPNGNHNN',
+      c: ['', '', '', 'Sales, purchases and transfers from ' + FQ_E, 'Plus access to the Breedr livestock market (US/UK).', '', '', 'Sale management sits with Outcross Agri-Services, not the Stockbook page.', 'Sales & Purchases report doubles as the LPA compliance report.', 'Includes customer management.'] },
+    { j: 1, n: 'Classes, ages and bulk actions', d: 'Classify stock (e.g. ewes, wethers, steers), age them up and apply bulk changes.', r: 'NNNPNGNNNN',
+      c: ['Customisable classing; bulk classing, scanning and weaning actions.', '', 'Pre-programmed classes and bulk class management in all plans; custom stock classes are Performance only.', 'Describe stock from ' + FQ_E, '', '', '', '', '', ''] },
+    { j: 1, n: 'Livestock totals and stocking rate graphs', d: 'Totals by breed and class, with historic stocking rate graphs.', r: 'NNNPNPNNNN',
+      c: ['Totals by breed, class or custom category; historic graphs.', 'Stocking rate in custom animal units (DSE etc.).', 'Automatic animal ratings and stocking rate optimisation.', 'Reporting from ' + FQ_E, 'Reporting dashboards.', 'Stock Units, feed demand and stocking rate in ' + HB_P, 'Performance insights dashboards.', 'Standard industry reports and a report writer.', 'Units in DSE, AE, LSU, MJ or custom.', 'Inventory reports.'] },
+
+    // 2 Individual animal / eID
+    { j: 2, n: 'Individual animal profiles', d: 'A record per animal: NLIS/EID tag, visual tag, sex, breed, date of birth.', r: 'GNUPNHNNNN',
+      c: ['Mob-based only. Not on Mobble\'s pages, and a competitor (Livestock Library) states Mobble has no individual EID tracking.', 'Choose mob or individual animal management on Essentials; separate Individual Animal Management trial. Price difference not published.', 'Livestock tracked by class, weight and reproductive state; individual records not explicit.', 'Individual EID recording needs ' + FQ_PRO, 'Lifetime individual tracking is the core of the product.', 'Each collar identifies an individual animal for location and behaviour, not a full animal register.', 'Individual sheep and cattle profiles on the free plan.', 'Individual animal management from conception to carcass.', 'Individual and mob records in the Livestock module.', 'Complete cattle records.'] },
+    { j: 2, n: 'EID reader connection', d: 'Pair a Bluetooth stick reader or panel reader to scan tags into the app.', r: 'GNUPNGNNNN',
+      c: ['No EID connection documented.', 'Live sessions with Gallagher, Tru-Test, Shearwell, Te Pari and Allflex readers (hardware bought separately).', '', 'EID files feed NAIT from Essentials; individual tracking needs ' + FQ_PRO + ' Gallagher HR3-5 readers connect to the app.', 'Bluetooth link to popular EID readers and weigh heads, all tiers.', 'Uses collars, not EID tags.', 'Instant EID reader connection (free plan).', 'Works with major EID readers and drafters, live or by import.', '"Compatible with all electronic tag and reading equipment."', 'EID reader integrations and the TagMax app (plan not stated).'] },
+    { j: 2, n: 'Animal lifetime history', d: 'Every move, treatment, weight and tag event on one timeline per animal.', r: 'GNUPNHNNNN',
+      c: ['Mob history only.', 'Individual Animal Management: scan a tag to bring up the full history.', '', 'Animal history needs ' + FQ_PRO, 'Conception-to-carcass tracking.', 'Replay of individual locations and behaviour trends in ' + HB_P, '', 'Weight history, joinings, progeny, pedigree, EBVs and paddock moves in Stockhand.', 'Animal History report (moves, treatments, feeds, births, missing/stolen/found).', ''] },
+    { j: 2, n: 'Pedigree, EBVs and genomics', d: 'Sire/dam lineage, EBVs/ASBVs/EPDs, DNA results and breed society links.', r: 'GUGUPGUNNP',
+      c: ['', 'Management tags and carcass data documented; pedigree and EBVs not on public pages.', '', 'Beef EQ reports in Pro; pedigree not documented.', 'Genetics, Genomics and Pedigree Lineage need Premium (US$150/month) or "Basic Plus".', '', '', 'Pedigree, EBVs/ASBVs, DNA reporting, ET programs, breed society submission.', 'Fertility data, genealogy and bloodline tracing.', 'Registered plan (roughly US$9-15/month more than Commercial): breed associations, 3-generation pedigrees, EPDs/EBVs.'] },
+
+    // 3 Weights
+    { j: 3, n: 'Weight records', d: 'Record weights for a mob or individual animals.', r: 'GPNPNGNNNN',
+      c: ['Not documented; PMF notes say live weights are not supported yet.', 'Treatment and weight records start at ' + AW_C, 'Weight and growth tracking in every plan.', 'Liveweights need ' + FQ_P, 'Quick weigh at chute processing.', '', 'Record weights on the free plan.', '', '', 'Measurements against all or selected animals.'] },
+    { j: 3, n: 'Scale and auto-weigher integration', d: 'Pull weights straight from Gallagher, Tru-Test, Te Pari or Optiweigh.', r: 'GPUPNGNNHN',
+      c: ['Optiweigh integration is planned (PMF notes); none live.', 'Gallagher, Tru-Test, Shearwell, Te Pari hardware; weight records need ' + AW_C, '', 'Tru-Test (XR/ID series), Gallagher TW/TSi and Te Pari integrations; liveweights need ' + FQ_P, 'Digital weigh heads by Bluetooth; Optiweigh remote scales feed herd records.', '', 'Weigh head connectivity.', 'Major weigh scale indicators, live or imported.', 'Electronic equipment compatibility stated; scales not named.', 'Weigh scale integrations listed (models not named).'] },
+    { j: 3, n: 'Average daily gain and weight projections', d: 'Growth rates against targets and forecast sale dates.', r: 'GPPPNGHNNH',
+      c: ['', 'Weight projections and insights need ' + AW_P, 'Weight and ratings forecast, animal growth forecasting: ' + AT_M, 'Weight predictor needs ' + FQ_PRO, 'Supply prediction: when cattle hit target weights.', '', 'Weight analytics dashboards (paid tier likely).', 'Weight gain through standard reports.', 'Weight gain over time by animal, class, breed, paddock or genetics; Grazing Yield.', 'Weight records; ADG reporting not on public pages.'] },
+
+    // 4 Treatments and withholding
+    { j: 4, n: 'Animal health treatment records', d: 'Drenches, vaccines and other treatments by mob or animal.', r: 'NPUPNGPUNN',
+      c: ['Treatment records in mob history.', 'Treatment records start at ' + AW_C, '', 'Animal health treatments from ' + FQ_E, 'Medicine Cabinet: log treatments chute-side.', '', 'Treatment recording is a PRO feature (about US$20/month).', 'Not on the public page (PMF notes listed it as native).', 'Treatments and feeds by group or individual.', 'Herd health records.'] },
+    { j: 4, n: 'Withholding period / ESI tracking', d: 'Track WHP and ESI and show what can\'t be sold yet.', r: 'NPUPUGPUNU',
+      c: ['WHP and ESI stored with inventory batches; colour-coded WHP on the map.', 'Part of Compliance tier treatment and audit tools.', '', 'Treatments from Essentials; WHP alerts not named.', '"Stay compliant"; WHP not named.', '', 'Users cite withdrawal period reminders (PRO).', '', 'Withholding report covers animals, and paddocks with Phoenix Cropping.', ''] },
+    { j: 4, n: 'Medicine and chemical inventory (batch, expiry)', d: 'Stock on hand of animal health products with batch numbers and expiry dates.', r: 'NPUPNGNUNU',
+      c: ['Live inventory with batch IDs, expiry dates and WHP; shared across properties.', 'Real-time inventory starts at ' + AW_C, 'Feed inventory only.', 'Inventory auto-updated from Gallagher treatment data; chemical application from Essentials.', 'Medicine Cabinet inventory tracking.', '', 'Virtual medicine cabinet (free plan).', '', 'Inventory management with Stocktake and Product Use reports.', ''] },
+
+    // 5 LPA / NVD / eNVD
+    { j: 5, n: 'LPA audit-ready records', d: 'Reports that satisfy a Livestock Production Assurance audit.', r: 'NPUGUGGNNG',
+      c: ['Audit-ready reports; auditors can be invited to view. A customer reports passing an LPA audit with Mobble records.', 'Audit compliance tools and LPA integration from ' + AW_C, '', 'NZ product: NZFAP and Farm Assurance Programme instead of LPA.', '', '', 'UK and Irish schemes only.', 'Compliance records for LPA, PCAS, NLIS and EU.', 'Sales & Purchases report serves as the LPA compliance report.', 'US product; no LPA.'] },
+    { j: 5, n: 'Create and submit eNVDs in the app', d: 'Fill the electronic National Vendor Declaration from mob data and submit it to ISC.', r: 'GPUGUGGUUG',
+      c: ['Not documented. A records export can support a paper or ISC eNVD.', 'eNVD tool pre-fills farm and mob details after linking the LPA account. Tier not stated on pricing page; third-party listings place it in Compliance.', '', 'NZ uses ASDs, not NVDs.', '', '', '', '', 'NVD not mentioned on Phoenix pages.', ''] },
+    { j: 5, n: 'Sale record created from the NVD', d: 'Submitting the eNVD reconciles mobs and writes the sale.', r: 'GPUGUGGUUG',
+      c: ['', 'Reconciling an eNVD removes transported animals and creates a sale record referencing the NVD.', '', '', '', '', '', '', '', ''] },
+
+    // 6 NLIS / NAIT
+    { j: 6, n: 'Submit movements, births and deaths to NLIS / NAIT', d: 'Send transfers, deaths, retags and births to the national traceability database from the app.', r: 'GPUPUGGHHG',
+      c: ['Not documented; no NLIS integration.', 'One-way submission of deaths, sales, purchases, transfers, retags and births to NLIS (documented for Individual Animal Management). A rival lists it as a A$300/yr add-on; unverified.', '', 'Automatic NAIT reporting from ' + FQ_E + ' NZ only; FarmIQ is an accredited NAIT information provider.', 'Not documented for AU.', '', 'UK/IE movement systems (BCMS, ScotEID, NIFAIS), not NLIS.', 'NLIS named in compliance list; submission method not documented.', 'Connects to the NLIS database for tag reconciliation; direct submission not explicit.', 'US product; no NLIS.'] },
+    { j: 6, n: 'NLIS tag reconciliation and file import', d: 'Match tags held on the PIC to the NLIS database; import NLIS files.', r: 'GPUPUGGHNG',
+      c: ['', 'Upload NLIS CSV files into AgriWebb.', '', 'EID tag library from Gallagher and other files.', '', '', '', '', 'Simplifies NLIS electronic tag reconciliation.', ''] },
+
+    // 7 Biosecurity and audit trail
+    { j: 7, n: 'Biosecurity plan builder', d: 'Create and print a farm biosecurity plan (e.g. J-BAS).', r: 'UPUNUGUUUU',
+      c: ['Not on the compliance page.', 'Biosecurity plan meeting J-BAS, printable for auditors; Compliance tier.', '', 'Farm Assurance Programme, NZFAP Plus and Farm Environment Plan in Lite (NZ schemes).', '', '', '', '', '', ''] },
+    { j: 7, n: 'Activity log / audit trail', d: 'Who did what, when, on which mob or paddock.', r: 'NNNNHHNNNN',
+      c: ['Mob and paddock histories; property chat.', 'Farm Activity list records every activity and who did it.', 'Completion logs with images; required records before a task can close.', 'Farm diary.', 'Lifetime animal records.', 'Automated grazing records in Beef Pro.', '', '', '', ''] },
+    { j: 7, n: 'Hazard and exclusion-zone mapping', d: 'Map hazards, stock exclusion zones and WH&S landmarks.', r: 'NNHNUHUUPH',
+      c: ['Hazards and stock exclusion zones on the map.', 'Water, infrastructure and landmark mapping.', 'Infrastructure mapping.', 'Health and safety module in Lite.', '', 'Map pins.', '', 'No mapping documented.', 'WH&S maps (hazards, UHF and phone coverage) in ' + PX_MAP, 'Map features such as ponds, trees and water lines.'] },
+    { j: 7, n: 'Auditor and adviser access', d: 'Give accountants, agents, agronomists and auditors their own scoped login.', r: 'NNNNNUPUPN',
+      c: ['Mobble Connect: advisers, agents, contractors and auditors (Core includes 2 Connect members, Team unlimited).', 'Unlimited users with roles.', 'Grazing Link shares live data with partners; View Only role.', 'Third-party access and contractor management in Lite.', 'Unlimited users.', '', 'Multiple users need PRO.', '', 'Live: each extra concurrent user +A$63/month plus A$198 setup.', 'Unlimited users at no cost.'] },
+
+    // 8 Grazing plan and rotation
+    { j: 8, n: 'Forward grazing / rotation planner', d: 'Plan which mob goes to which paddock and when, before it happens.', r: 'GPNPGPHGHG',
+      c: ['Records only. The FAQ says history helps plan rotations, but no forward planner is described.', 'Grazing Planning add-on A$300/yr, Performance plan only.', 'Graze chart covers past, current and planned grazes in Core.', 'Feed planner in ' + FQ_P + ' Scenario modelling via FARMAX (separate product).', '', 'Digital seasonal grazing planner in ' + HB_P, 'Pasture by Herdwatch "plan rotations" (tier not stated).', '', 'Stocking schedules and rotation analysis reports; no forward planner described.', 'Animals move between pastures; rotation planning not mentioned.'] },
+    { j: 8, n: 'Target rest and recovery planning', d: 'Set target rest days or recovery per paddock and plan to them.', r: 'HPPPGPUGHG',
+      c: ['Rest counters guide timing; no target settings.', 'Grazing Planning add-on uses target rest (Performance).', 'Paddock recovery target graze planning: ' + AT_M, 'Pasture wedge in ' + FQ_P, '', 'Rest period map in ' + HB_P, '', '', 'Paddock recovery periods in grazing reports.', ''] },
+    { j: 8, n: 'Stocking rate vs carrying capacity', d: 'Compare stock on hand with what the land can carry.', r: 'HPNPGPUGNG',
+      c: ['Stocking rate comparison across paddocks and periods; no carrying capacity.', 'Stocking rate vs carrying capacity report needs ' + AW_P, 'Stocking rate optimisation from feed position (Core); supply and demand forecasting from Management.', 'Feed budgets in ' + FQ_P, '', 'Feed demand and stocking rate in Stock Units: ' + HB_P, '', '', 'Carrying capacity and stocking schedules in grazing reports.', ''] },
+    { j: 8, n: 'Planned moves become tasks; plan vs actual', d: 'A planned move turns into a team task, and actual grazing is compared to the plan.', r: 'GUNUGPUGGG',
+      c: ['', '', 'Planned graze moves become actionable tasks.', '', '', 'Compares plan to actual grazings, loaded automatically (Beef Pro).', '', '', '', ''] },
+
+    // 9 Feed budget / pasture
+    { j: 9, n: 'Pasture cover / feed on offer recording', d: 'Record or estimate kg DM/ha per paddock.', r: 'GPNPGPUGGG',
+      c: ['Not documented.', 'Forage estimates and grazing days on the map (Grazing management, Performance tier).', 'Expected yield and residuals in all plans; feed on offer planner is Performance only.', 'Pasture wedge and Jenquip plate meter integration in ' + FQ_P, '', 'Pasture and forage observations in ' + HB_P, '', '', 'Grazing yield measures weight gain, not feed on offer.', 'Hay production per pasture only.'] },
+    { j: 9, n: 'Satellite pasture data', d: 'Automatic pasture biomass from satellite imagery.', r: 'GIGUGPUGGG',
+      c: ['', 'Cibo Labs PastureKey updates paddocks every 5 days (separate subscription, PastureKey from about A$1,000/yr).', 'Not mentioned.', 'Satellite mapping mentioned by third parties; pasture biomass not documented.', '', 'Satellite forage view in ' + HB_P, '', '', 'No satellite or NDVI on Mapping page.', ''] },
+    { j: 9, n: 'Feed budget / supply-demand forecast', d: 'Forecast feed supply against stock demand to set stocking and destocking triggers.', r: 'GPPPGPUGHG',
+      c: ['', 'Grazing Planning add-on calculates grazing days from FOO; Feed Planner (tier not stated).', 'Supply/demand forecasting: ' + AT_M + ' Feed budget graze planning: ' + AT_P, 'Feed budgets and feed planner in ' + FQ_P, '', 'Feed demand per mob in ' + HB_P, '', '', 'Carrying capacity reports, no feed budget.', ''] },
+    { j: 9, n: 'Feed inventory (hay, grain, supplements)', d: 'Feed stock on hand and usage over time.', r: 'NPNPUGNNNH',
+      c: ['Live inventory of feed with usage tracking.', 'Feed management starts at ' + AW_C, 'Feed inventory tracking in all plans; burn-down report needs Management.', 'Harvested feed storage and inventory (Performance+ likely).', '', '', 'Feed purchases on the free plan.', 'Supplementary feeding tracking.', 'Feeds recorded by group or animal; inventory reports.', 'Hay production per pasture.'] },
+
+    // 10 Rainfall, water, IoT
+    { j: 10, n: 'Rainfall recording and charts', d: 'Multiple gauges, month and year to date, year-on-year charts.', r: 'NNNPGGPGNN',
+      c: ['Multiple gauges; YTD, MTD and multi-year charts.', 'Rainfall records and reporting.', 'Multiple gauges, rolling rainfall and averages; effective rainfall.', 'Weather from ' + FQ_E, '', '', 'Weather forecast and rain in PRO.', '', 'Free weather tool with any Live production module.', 'Rainfall tracking by month and year.'] },
+    { j: 10, n: 'Water tank and trough sensors', d: 'Live tank and trough levels on the farm map.', r: 'IIUGGGGGGG',
+      c: ['Farmbot (troughs, tanks, rain gauges) and Farmo (Water Rat, tanks, rain, electric fence), view only. No Mobble charge; hardware and data subscription from those vendors.', 'Farmbot, Agbot and Farmo water monitoring.', '', 'Harvest Systems logger covers weather and soil, not water.', '', '', '', '', 'Water reticulation planning in Mapping; no sensors.', ''] },
+    { j: 10, n: 'Weather station and soil probe data', d: 'Automated weather and soil moisture feeds.', r: 'IIUIGGUGHG',
+      c: ['Rain gauges via Farmbot and Farmo.', 'Weathermatic weather and unnamed soil probes.', '', 'Harvest Systems: rainfall, temperature, soil temperature and moisture into paddock history.', '', '', '', '', 'Free weather tool records weather across properties (manual or automated not stated).', ''] },
+
+    // 11 Virtual fencing
+    { j: 11, n: 'Virtual fences and automated mob shifts', d: 'GPS collars hold stock in virtual breaks and move them on schedule.', r: 'GGGGGNGGGG',
+      c: ['', '', '', '', '', 'Core product: virtual fencing, break creation, remote shifting. About US$5-10 per collar per month, collars included, plus startup.', '', '', '', ''] },
+    { j: 11, n: 'Animal location and behaviour monitoring', d: 'Live GPS location, no-movement alerts, grazing and rumination trends.', r: 'GGGGGNGGGG',
+      c: ['', '', '', '', '', 'GPS location and no-movement alerts in Base; behaviour trends (grazing, ruminating, lying, walking) in Beef Pro.', '', '', '', ''] },
+
+    // 12 Cropping
+    { j: 12, n: 'Sowing and planting records', d: 'Record what was sown where and when.', r: 'NPGPGGUGPG',
+      c: ['Sowing, spraying, fertilising and harvest actions on paddocks.', 'Cropping records and reporting start at ' + AW_C, '', 'Planting and harvesting need ' + FQ_P, '', '', '', '', 'Cultivation and activity history: ' + PX_CROP, 'Pasture maintenance only.'] },
+    { j: 12, n: 'Spray, fertiliser and chemical application log', d: 'Application records with product, rate, batch and WHP.', r: 'NPGPGGHGPH',
+      c: ['Chemical and fertiliser records with batch numbers, expiry and WHP; multi-paddock entry.', 'Paddock treatments via inventory: ' + AW_C, '', 'Fertiliser and chemical application from ' + FQ_E + ' Tabula proof-of-placement integration.', '', '', 'Pasture by Herdwatch tracks fertiliser (sprays tier not stated).', '', 'Digital spray diary and Nutrient Application report: ' + PX_CROP, 'Fertilisation logged as pasture maintenance.'] },
+    { j: 12, n: 'Harvest and yield records', d: 'Harvest dates, tonnes and yield per hectare.', r: 'HPGPGGGGPH',
+      c: ['Harvest actions logged; yield tracking not described.', 'Harvest records and reports, including storage and feed-out (tier not stated).', '', 'Harvesting and harvested feeds in ' + FQ_P, '', '', '', '', 'Yield report, crop performance and insurance declaration reports: ' + PX_CROP, 'Hay production per pasture.'] },
+    { j: 12, n: 'Crop plans and gross margins', d: 'Plan the season with projected gross margins and break-even yields.', r: 'GPGUGGGGPG',
+      c: ['', 'Paddock cost of production and gross margin reports need ' + AW_P, '', '', '', '', '', '', 'Crop planning with projected gross margin and break-even: ' + PX_CROP, ''] },
+    { j: 12, n: 'Agronomy platform link', d: 'Connect to a dedicated agronomy or cropping system.', r: 'IGGIGGGGGG',
+      c: ['Agworld two-way: Mobble mob locations in Agworld, Agworld WHP in Mobble. No Mobble charge; Agworld subscription separate.', 'No agronomy platform integration listed.', '', 'Tabula application data flows into FarmIQ.', '', '', '', '', 'In-house Cropping module instead.', ''] },
+
+    // 13 Financials
+    { j: 13, n: 'Income and expense tracking', d: 'Record income and costs against the farm, mobs or animals.', r: 'HPGIPGPGPN',
+      c: ['Features page says reconciliation reports cover "financial records"; no income/expense ledger.', 'Financial reporting needs ' + AW_P, '', 'Through Figured (needs Performance+ or Enterprise packs).', 'Financial reporting (income and expenses per animal or group) needs Premium or "Basic Plus".', '', 'Gross profit insights in the UK Innovator plan.', '', PX_FIN, 'Income and expense tracking in Commercial.'] },
+    { j: 13, n: 'Accounting software sync', d: 'Push or pull data with Xero, MYOB, QuickBooks or Figured.', r: 'IIGIUGUGPU',
+      c: ['Farm Focus (NZ): births and deaths sync one way into Farm Focus. No Xero/MYOB link.', 'Xero and QuickBooks pull sales, purchases and stock numbers; Figured also listed.', '', 'Figured: births, deaths, sales, purchases and weights flow one way (Performance+ and Enterprise). FARMAX link too.', '', '', '', '', 'Phoenix Financials is its own accounting package: ' + PX_FIN, ''] },
+    { j: 13, n: 'Gross margin / cost of production', d: 'Gross margin and cost of production by enterprise, mob or paddock.', r: 'GPGIPGPGPH',
+      c: ['', 'Gross margin, cost of production and paddock cost of production reports need ' + AW_P, '', 'Via Figured or FARMAX.', 'Profit tracking from pasture to sale needs Premium.', '', 'Gross profit per animal or group (UK Innovator plan).', '', 'Gross margin with Financials plus Cropping modules.', 'Income and expense by account; enterprise gross margin not documented.'] },
+
+    // 14 Multiple properties
+    { j: 14, n: 'Multiple properties in one account', d: 'Run several properties under one login.', r: 'NNPPHUUUNU',
+      c: ['Unlimited properties on every plan.', 'Unlimited farms.', 'Core is one property; unlimited properties need ' + AT_M, 'Each farm is a separate subscription.', 'Supply chain management moves calves between operations.', '', '', '', 'Livestock page: unlimited properties. On Live, each extra book is +A$17/month.', 'One account; multiple locations not mentioned.'] },
+    { j: 14, n: 'Consolidated cross-property reporting', d: 'One report across all properties.', r: 'NHPUUUUUHU',
+      c: ['Multi-property reporting and shared inventory.', 'Multi-farm access; consolidated reporting not documented (Corporate plan via sales).', 'Role-based oversight is a Performance feature.', '', '', '', '', '', 'Weather across properties; consolidated livestock reporting not explicit.', ''] },
+    { j: 14, n: 'No extra charge per property', d: 'Adding a property doesn\'t add a fee.', r: 'NNHGNNUUHN',
+      c: ['Priced on livestock numbers only.', 'Priced on livestock numbers only.', 'No per-property fee on Management and Performance; Core allows one property.', 'Per-farm fee: 25% off the 2nd and 3rd farms, 50% off the 4th onwards.', 'Priced on animal numbers.', 'Priced per collar.', '', '', 'Live: +A$17/month per extra book.', 'Priced per account on active animals.'] },
+
+    // 15 Team tasks and offline
+    { j: 15, n: 'Task assignment with reminders', d: 'Assign jobs to staff with due dates and reminders.', r: 'NNNNUHUGPN',
+      c: ['Due dates and automatic reminders.', 'Task management and calendar.', 'Calendar and daily agenda; verified completion.', 'Farm diary, calendar, tasks and plans in Lite.', '', 'Map Pins for on-farm tasks.', '', 'Not documented.', 'Staff tasks on the map, Phoenix Live only.', 'Calendar and tasks.'] },
+    { j: 15, n: 'Geolocated tasks and map pins', d: 'Drop a task at a location so staff can find it.', r: 'NNNUGNUGPN',
+      c: ['', 'GPS-enabled tasks and tools.', 'GPS tasks that guide staff even without signal.', '', '', '', '', '', 'Phoenix Live only.', 'Drop a pin to assign a task by location.'] },
+    { j: 15, n: 'Role-based permissions', d: 'Control what each team member can see and edit.', r: 'NNNHUUUUUU',
+      c: ['Team member roles control visibility and editing.', 'User roles and permissions.', '2 roles in Core, 4 in Management, 5 in Performance.', 'Staff records and third-party access.', '', '', '', '', '', 'Own logins for every user; roles not described.'] },
+    { j: 15, n: 'Offline recording with sync', d: 'Enter records in the field with no signal.', r: 'NNNNNHNHNU',
+      c: ['', '', '', 'All packs.', '', 'Satellite-enabled app usage.', 'Works offline at the crush.', 'Desktop is local; Stockhand offline not documented.', 'Phoenix Live app works offline.', ''] },
+    { j: 15, n: 'Unlimited users', d: 'No per-user charge for the whole team.', r: 'PNNNNUPUPN',
+      c: ['Core includes 2 Team and 2 Connect members; unlimited needs the Team plan (about 16-27% dearer at the same band).', 'Unlimited users on every plan.', 'Unlimited users in every plan.', 'Unlimited users per farm.', 'Unlimited users.', '', 'Free plan is single user; multiple users need PRO.', '', 'Live: +A$63/month per extra concurrent user (first module) plus A$23 per extra module, and A$198 setup each. Desktop: unlimited users, device activation fees.', 'Unlimited users at no extra cost.'] },
+
+    // 16 Breeding
+    { j: 16, n: 'Joining and mating records', d: 'Who was joined to what, when; natural service and AI.', r: 'UPPPNUNNNN',
+      c: ['Not documented (scanning and weaning are listed as mob actions).', 'Joining records start at ' + AW_C, 'Reproductive state change planner is Performance only.', 'Mating needs ' + FQ_P, 'Breeding and calving recording.', 'Heat detection is a dairy feature; beef breeding not documented.', 'Breeding management.', 'Joinings in Stockbook and Stockhand.', 'Fertility data from sire and dam to progeny.', 'Bull exposure updates cows automatically.'] },
+    { j: 16, n: 'Pregnancy scanning', d: 'Record scanning results and conception rates.', r: 'NPUPNGNNNN',
+      c: ['Bulk scanning mob action.', 'Pregnancy scan records start at ' + AW_C, '', 'Scanning needs ' + FQ_P, '', '', 'Preg checks.', '', 'Tests report (pregnancy and custom tests).', 'Pregnancy checks from the pasture view.'] },
+    { j: 16, n: 'Calving/lambing, marking and weaning', d: 'Birth outcomes, marking counts and weaning.', r: 'HPPPNGNNNN',
+      c: ['Weaning mob action and natural increase; marking not explicit.', 'Marking and weaning in livestock fertility (Compliance/Performance).', 'Reproductive planning of birth and weaning timing: ' + AT_P, 'Marking and weaning need ' + FQ_P, 'Calving recording.', '', 'Lambed lists and lambing stats.', 'Birth details and mothering up.', 'Birth rates and dry animals reports.', 'Calving and weaning.'] },
+
+    // 17 Marketing
+    { j: 17, n: 'Marketplace, saleyard or supply-chain links', d: 'List, sell or price stock through a connected market or program.', r: 'GGGGNGHHGP',
+      c: ['', '', '', '', 'Breedr livestock market, supply chains, special grids (US/UK focus).', '', 'Automatic upload from slaughterhouse or sale yard (UK/IE).', 'Sale management via Outcross Agri-Services.', '', 'Cattle and customer marketing in the Registered plan.'] },
+    { j: 17, n: 'Kill-sheet / carcass feedback', d: 'Carcass data back from the processor against mobs or animals.', r: 'GNGPNGHHUU',
+      c: ['', 'Add or upload carcass data to sale records.', '', 'ANZCO and Silver Fern Farms kill sheets in Performance+ and Pro; Beef EQ reports in Pro.', 'Individual carcass grades.', '', 'Automatic upload from slaughterhouse (UK/IE).', '"Conception to carcass" records.', '', ''] },
+  ];
+
+  // Round 2: apply help-centre / blog evidence
+  const EV = (typeof EVID !== 'undefined') ? EVID : (typeof require !== 'undefined' ? require('./evidence.js') : null);
+  if (EV) EV.E.forEach(([fi, v, k, cav, src]) => {
+    const vi = V.indexOf(v), f = F[fi];
+    if (vi < 0 || !f) throw new Error('bad evidence ' + fi + ' ' + v);
+    f.prev = f.prev || f.r;
+    f.r = f.r.slice(0, vi) + k + f.r.slice(vi + 1);
+    f.c[vi] = cav;
+    (f.src = f.src || {})[v] = EV.SRC[src];
+  });
+  const SCORE = { N: 1, P: 0.8, I: 0.6, H: 0.5, G: 0, U: 0 };
+  function cell(f, vi) {
+    const v = V[vi], k = f.r[vi];
+    const cv = (f.c && f.c[vi]) || '';
+    const src = f.src && f.src[v];
+    const changed = !!(f.prev && f.prev[vi] !== k) || !!src;
+    return { k, text: cv || DEF[k](v), src, was: f.prev ? f.prev[vi] : k, changed };
+  }
+  // job-level score per vendor: mean of feature scores. uScore lets the dashboard treat "not documented" as 0 or 0.5
+  function jobScores(nJobs, uScore) {
+    const out = {};
+    V.forEach((v, vi) => {
+      out[v] = [];
+      for (let j = 0; j < nJobs; j++) {
+        const fs = F.filter(f => f.j === j);
+        let s = 0, cnt = { N: 0, P: 0, I: 0, H: 0, G: 0, U: 0 };
+        fs.forEach(f => { const k = f.r[vi]; cnt[k]++; s += k === 'U' ? (uScore || 0) : SCORE[k]; });
+        out[v].push({ s: fs.length ? s / fs.length : 0, cnt, n: fs.length });
+      }
+    });
+    return out;
+  }
+  return { V, F, BASE, SCORE, cell, jobScores };
+})();
+if (typeof module !== 'undefined') module.exports = FEAT;
+
+;
+if (typeof require !== 'undefined' && typeof FEAT === 'undefined') { global.FEAT = require('./features.js'); }
+// Mobble JTBD competitor pricing + coverage model. Single source of truth for dashboard, CSV and markdown.
+// All outputs: AUD per year, ex GST. Inputs in native currency; FX adjustable.
+const MODEL = (function () {
+  const FX = { usd: 1 / 0.70, nzd: 1 / 1.20 }; // AUD per 1 unit of foreign currency (assumptions, editable in dashboard)
+
+  const VENDORS = [
+    { id: 'mobble', name: 'Mobble', kind: 'Focus', cur: 'AUD', species: 'both', region: 'AU/NZ' },
+    { id: 'agriwebb', name: 'AgriWebb', kind: 'Direct', cur: 'AUD', species: 'both', region: 'AU/NZ/US/UK' },
+    { id: 'atlas', name: 'Atlas Grazing', kind: 'Adjacent (planning)', cur: 'AUD?', species: 'both', region: 'AU' },
+    { id: 'farmiq', name: 'FarmIQ', kind: 'Direct (NZ)', cur: 'NZD', species: 'both', region: 'NZ' },
+    { id: 'breedr', name: 'Breedr', kind: 'Direct', cur: 'AUD/USD', species: 'both', region: 'UK/AU/US' },
+    { id: 'halter', name: 'Halter', kind: 'Adjacent (hardware)', cur: 'USD', species: 'cattle', region: 'NZ/AU/US' },
+    { id: 'herdwatch', name: 'Herdwatch', kind: 'Direct (EU/US)', cur: 'USD', species: 'both', region: 'IE/UK/US' },
+    { id: 'stockbook', name: 'StockBook', kind: 'Direct', cur: 'AUD', species: 'both', region: 'AU' },
+    { id: 'phoenix', name: 'AGDATA Phoenix', kind: 'Direct (desktop/cloud)', cur: 'AUD inc GST', species: 'both', region: 'AU' },
+    { id: 'cattlemax', name: 'CattleMax', kind: 'Direct (cattle)', cur: 'USD', species: 'cattle', region: 'US/AU' },
+  ];
+
+  const JOBS = [
+    ['Record mob moves and paddock history', 5],
+    ['Stock reconciliation by mob', 5],
+    ['Individual animal / eID records', 3],
+    ['Weights and growth performance', 3],
+    ['Treatments and withholding periods', 3],
+    ['LPA / NVD / eNVD compliance', 4],
+    ['NLIS / NAIT movement submission', 3],
+    ['Biosecurity and audit trail', 3],
+    ['Grazing plan and rotation planning', 5],
+    ['Feed budget / pasture growth (satellite)', 3],
+    ['Rainfall, water and IoT sensors', 2],
+    ['Virtual fencing / automated herd moves', 2],
+    ['Cropping records and spray/chemical log', 4],
+    ['Financials / accounting link', 3],
+    ['Multiple properties, one login', 5],
+    ['Team tasks and offline field use', 3],
+    ['Breeding, joining, preg-test', 2],
+    ['Marketing and sales links', 1],
+  ];
+  // N native in base price, P paid tier/module/extra charge, I third-party integration, H partial, G gap
+  const COVER = {
+    mobble:    'NNGHNHGHGGIGHGNNHG',
+    agriwebb:  'NNNPPPPPPIIGPPNNPG',
+    atlas:     'NHGGGGGGPPNGGGPNGG',
+    farmiq:    'PPPPPHPHHHGGGIPNPG',
+    breedr:    'NNNNNHHHGGGGGGNHHN',
+    halter:    'NHNHGGGGPHHNGGNHHG',
+    herdwatch: 'HNNNNHGHGGGGGGHHNG',
+    stockbook: 'NNNNNHNHGGGGGGNHNI',
+    phoenix:   'PPPPPHPHGGGGPPHHPG',
+    cattlemax: 'NNNNNHGHHGGGGHHNNG',
+  };
+  const CODE_SCORE = { N: 1, P: 0.8, I: 0.6, H: 0.5, G: 0 };
+  const CODE_LABEL = { N: 'Native', P: 'Paid add-on / higher tier', I: 'Integration', H: 'Partial', G: 'Gap' };
+
+  const COHORTS = [
+    { id: 'c100',   name: 'Cattle 100',                      cattle: 100,   sheep: 0,     ha: 0,    users: 1, props: 1 },
+    { id: 'c1000',  name: 'Cattle 1,000',                    cattle: 1000,  sheep: 0,     ha: 0,    users: 2, props: 2 },
+    { id: 'c10000', name: 'Cattle 10,000',                   cattle: 10000, sheep: 0,     ha: 0,    users: 5, props: 5 },
+    { id: 's2000',  name: 'Sheep 2,000',                     cattle: 0,     sheep: 2000,  ha: 0,    users: 1, props: 1 },
+    { id: 's5000',  name: 'Sheep 5,000',                     cattle: 0,     sheep: 5000,  ha: 0,    users: 2, props: 2 },
+    { id: 's25000', name: 'Sheep 25,000',                    cattle: 0,     sheep: 25000, ha: 0,    users: 4, props: 3 },
+    { id: 'm300',   name: 'Mixed 300 cattle + 2,000 sheep',  cattle: 300,   sheep: 2000,  ha: 0,    users: 2, props: 2 },
+    { id: 'm1000',  name: 'Mixed 1,000 cattle + 5,000 sheep',cattle: 1000,  sheep: 5000,  ha: 0,    users: 3, props: 3 },
+    { id: 'x200',   name: 'Cattle 500 + 200 ha crop',        cattle: 500,   sheep: 0,     ha: 200,  users: 2, props: 1 },
+    { id: 'x1000',  name: 'Cattle 1,000 + 1,000 ha crop',    cattle: 1000,  sheep: 0,     ha: 1000, users: 3, props: 3 },
+    { id: 'x5000',  name: 'Cattle 2,000 + 5,000 ha crop',    cattle: 2000,  sheep: 0,     ha: 5000, users: 5, props: 4 },
+    { id: 'full',   name: 'Full mix: 800c + 4,000s + 1,500 ha, 3 props', cattle: 800, sheep: 4000, ha: 1500, users: 3, props: 3 },
+  ];
+
+  // ---- helpers
+  function interp(pts, x) { // log-x linear-y, extrapolates with end slopes
+    const lx = Math.log(x);
+    let i = 0;
+    while (i < pts.length - 2 && x > pts[i + 1][0]) i++;
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+    const s = (y1 - y0) / (Math.log(x1) - Math.log(x0));
+    return y0 + s * (lx - Math.log(x0));
+  }
+  const se5 = c => c.cattle * 5 + c.sheep; // AgriWebb sheep-equivalent (1 cattle = 5 sheep)
+  const cap6 = c => c.sheep + c.cattle * 6; // Mobble capacity in sheep equivalent (6 sheep = 1 cattle)
+  const hasCrop = c => c.ha > 0;
+  const R = (lo, mid, hi, flags, note) => ({ low: lo, mid: mid, high: hi, flags: flags || [], note: note || '' });
+
+  // ---- pricing per vendor: returns {low,mid,high,flags,note} in AUD/yr ex GST, or null if the product can't serve the cohort
+  const PRICE = {
+    mobble(c) {
+      const cap = cap6(c);
+      const core = [[800, 380], [4000, 720], [12000, 1200], [24000, 1800]];
+      const team = [[800, 440], [4000, 880], [12000, 1495], [24000, 2280], [50000, 3750]];
+      const find = (t) => { for (const [lim, p] of t) if (cap <= lim) return p; return null; /* band limits are inclusive in Mobble's live calculator: 2,000 cattle = 12,000 SE prices in the 12,000 band */ };
+      const coreP = find(core), teamP = find(team);
+      if (teamP === null) { // Enterprise: custom. Extrapolated
+        const e = 3750 + (cap - 50000) * 0.12;
+        return R(e * 0.9, e, e * 1.3, ['extrapolated'], 'Above 50,000 sheep equivalents is Enterprise (custom quote); estimate only');
+      }
+      const coreOK = coreP !== null && c.users <= 2;
+      const lo = coreOK ? coreP : teamP;
+      const mid = coreOK ? coreP : teamP;
+      return R(lo, mid, teamP, [], coreOK ? 'Core fits (2 team members)' : 'Team plan (more than 2 users or above Core bands)');
+    },
+    agriwebb(c) {
+      const E = [[250, 340], [500, 485], [1000, 675], [1250, 715], [2500, 915], [3500, 1030], [5000, 1195], [5500, 1250], [10000, 1535], [12500, 1660], [20000, 2035], [25000, 2285]];
+      const se = se5(c);
+      const ess = interp(E, Math.max(se, 250));
+      const flags = se > 25000 ? ['extrapolated'] : [];
+      const lowMult = hasCrop(c) ? 1.4 : 1.0; // cropping records start at Compliance tier
+      return R(ess * lowMult, ess * 1.4, ess * 1.8, flags, 'Essentials / Compliance / Performance; unlimited users and farms; Grazing Planning add-on A$300 is included in Performance' + (se > 25000 ? '; above 25,000 SE is a quote' : ''));
+    },
+    atlas(c) {
+      // Scraped from atlasag.com/atlasgrazing/pricing calculator (yearly billing, AUD, GST treatment not stated). Price steps by DSE (cattle 8, sheep 1.5).
+      const T = [[800, 350, 1100, 1500], [3000, 850, 1500, 2000], [4000, 850, 1900, 2500], [5400, 1000, 1900, 2500], [8000, 1100, 2200, 2900], [15000, 1300, 2600, 3400], [16000, 1800, 2900, 3900], [80000, null, 8100, 10800]];
+      const dse = c.cattle * 8 + c.sheep * 1.5;
+      let row = null, flags = [];
+      for (const t of T) if (dse <= t[0]) { row = t; break; }
+      if (row && row[0] === 80000 && dse > 16000) { // between 16,000 and 80,000 DSE: interpolate (only two calculator points)
+        const k = (dse - 16000) / 64000;
+        row = [dse, null, 2900 + k * (8100 - 2900), 3900 + k * (10800 - 3900)]; flags.push('interpolated');
+      }
+      if (!row) { const k = dse / 80000; row = [dse, null, 8100 * k, 10800 * k]; flags.push('extrapolated'); }
+      const core = row[1], mgmt = row[2], perf = row[3];
+      const low = (c.props === 1 && core !== null) ? core : mgmt;
+      return R(low, mgmt, perf, flags, 'Calculator prices by DSE (cattle 8, sheep 1.5). Core is one property only' + (core === null ? ' and is quote-only at this size' : '') + '. GST treatment not stated');
+    },
+    farmiq(c) {
+      const farms = 1 + 0.75 * Math.min(2, c.props - 1) + 0.5 * Math.max(0, c.props - 3);
+      const f = m => m * 12 * FX.nzd * farms;
+      return R(f(84), f(190), f(249), ['NZ-only'], 'NZD per farm per month, 2nd/3rd farm 25% off, 4th+ 50% off. Essentials / Performance+ / Pro. NZ product (NAIT), not sold for AU compliance');
+    },
+    breedr(c) {
+      const ce = c.cattle + c.sheep / 5;
+      let base, hi, note;
+      if (ce <= 200) { base = 50 * 12; hi = 100 * 12; note = 'AU Starter A$50/mo, Pro A$100/mo'; }
+      else {
+        const t = ce <= 400 ? 40 : ce <= 1500 ? 150 : ce <= 3000 ? 250 : 650;
+        base = t * 12 * FX.usd; hi = base; note = 'US tier ladder converted (Basic 400 / Premium 1,500 / Core 3,000 / Enterprise 10,000)';
+      }
+      const flags = ce > 10000 ? ['extrapolated'] : (ce > 200 ? ['low-confidence'] : []);
+      if (ce > 10000) base = hi = 650 * 12 * FX.usd * (ce / 10000);
+      return R(base, base, hi, flags, note);
+    },
+    halter(c) {
+      if (c.cattle === 0) return null;
+      const startup = 1500 * FX.usd / 3; // amortised over 3 yrs
+      const f = usd => c.cattle * usd * 12 * FX.usd + startup;
+      return R(f(5), f(8), f(10), ['collar-per-head', 'cattle-only'], 'US$5-10 per collared head per month, hardware included, US$1,500 startup amortised over 3 years. Assumes every head collared');
+    },
+    herdwatch(c) {
+      const cat = Math.max(120, c.cattle * 1.8);
+      const sh = c.sheep === 0 ? 0 : (c.sheep < 500 ? 219 : 219 + (c.sheep - 500) * 0.45);
+      const base = (cat * (c.cattle ? 1 : 0) + sh) * FX.usd;
+      return R(base * 0.8, base, base * 1.5, ['low-confidence', 'not-sold-AU'], 'US$ list: sheep PRO from $219/yr (200-499 ewes); cattle approx US$1.8 per head (estimate). Not sold in AU/NZ');
+    },
+    stockbook(c) {
+      const small = c.cattle <= 100 && c.sheep <= 500;
+      if (small) return R(480, 480, 2100, ['low-confidence'], '$40/mo up to 100 cattle or 500 sheep; $175/mo unlimited (not re-verified)');
+      return R(1200, 2100, 2100, ['low-confidence'], '$175/mo unlimited tier; low case assumes an unverified middle tier');
+    },
+    phoenix(c) {
+      const m = 2 + (hasCrop(c) ? 1 : 0);
+      const u = c.users;
+      const live = (mm, uu) => 90 + 23 * (mm - 1) + (uu - 1) * (63 + 23 * (mm - 1));
+      const desk = (mm, fin) => fin ? 77 + 29 * mm : 57 + 29 * (mm - 1);
+      const g = 1 / 1.1;
+      const low = desk(m, false) * 12 * g;
+      const mid = (live(m, u) * 12 + 198 * u / 3) * g;
+      const high = (live(m + 1, u) * 12 + 198 * u) * g;
+      return R(low, mid, high, [], `Livestock+Mapping${hasCrop(c) ? '+Cropping' : ''} modules. Low = Desktop no financials; Mid = Live (cloud), ${u} users, setup fee over 3 yrs; High = Live + Financials, setup in year 1. GST-inclusive list divided by 1.1`);
+    },
+    cattlemax(c) {
+      if (c.cattle === 0) return null;
+      const T = [[100, 216], [250, 288], [500, 336], [750, 420], [1000, 660], [1500, 960]];
+      let usd = null;
+      for (const [lim, p] of T) if (c.cattle <= lim) { usd = p; break; }
+      let flags = ['cattle-only'];
+      if (usd === null) { usd = 960 + (c.cattle - 1500) * 0.55; flags.push('extrapolated'); }
+      return R(usd * FX.usd, usd * FX.usd, (usd + 150) * FX.usd, flags, 'USD yearly billing, unlimited users, cattle only (Registered tier adds roughly US$150/yr)');
+    },
+  };
+
+  // ---- value score (0-100) for vendor in cohort
+  function jobWeights(c) {
+    return JOBS.map(([n, w], i) => {
+      let x = w;
+      if (hasCrop(c) && i === 12) x *= 2;
+      if (c.sheep > 0 && (i === 2 || i === 6)) x += 1.5; // eID rules for sheep
+      if (c.props > 1 && i === 14) x += 1;
+      return x;
+    });
+  }
+  let U_SCORE = 0;
+  function setU(x) { U_SCORE = x; }
+  function valueScore(vid, c) {
+    const w = jobWeights(c), js = FEAT.jobScores(JOBS.length, U_SCORE)[vid];
+    let s = 0, t = 0;
+    w.forEach((x, i) => { s += x * js[i].s; t += x; });
+    let v = 100 * s / t;
+    const v0 = VENDORS.find(x => x.id === vid);
+    if (v0.species === 'cattle') {
+      const se = c.cattle * 5 + c.sheep;
+      v *= se ? (c.cattle * 5) / se : 0;
+    }
+    return v;
+  }
+  function compute(c) {
+    const out = {};
+    for (const v of VENDORS) {
+      const p = PRICE[v.id](c);
+      out[v.id] = p ? Object.assign({}, p, { value: valueScore(v.id, c) }) : null;
+    }
+    return out;
+  }
+  return { setU, FX, VENDORS, JOBS, COVER, CODE_LABEL, CODE_SCORE, COHORTS, PRICE, compute, valueScore, jobWeights };
+})();
+if (typeof module !== 'undefined') module.exports = MODEL;
+
+;
+const DETAIL = (function(){
+const JOBDESC = [
+ 'Log which mob (group of animals) moved into which paddock and when, so you get a dated grazing history, days grazed and rest periods per paddock.',
+ 'Keep head counts honest: opening stock + births + purchases - sales - deaths = closing stock, by mob, paddock and property.',
+ 'Track each animal by tag or electronic ID (eID reader) so health, weights, parentage and treatments follow the individual, not just the mob.',
+ 'Record weigh events, calculate average daily gain and weight projections against targets. Often links to scales or auto-weighers.',
+ 'Record drenches, vaccines and chemicals with withholding periods (WHP/ESI) and warn you before an animal is sold or slaughtered too early.',
+ 'Livestock Production Assurance accreditation records and the National Vendor Declaration (NVD) that accompanies sales. eNVD is the electronic version.',
+ 'Submit livestock movements and transfers to the national traceability database: NLIS in Australia, NAIT in New Zealand.',
+ 'Biosecurity plan, visitor and entry logs, movement history and audit-ready records that prove due diligence to buyers, auditors and regulators.',
+ 'Forward plan of paddock rotations, rest periods, stocking rates and scenarios, so you decide where mobs go next before feed runs short.',
+ 'Estimate feed on offer, pasture growth and supply versus demand, often from satellite imagery, to set stocking and destocking triggers.',
+ 'Rain gauges, weather and water monitoring (tank levels, trough sensors) feeding alerts into your records.',
+ 'GPS collars that create virtual boundaries and move herds automatically, replacing physical fence and gate work.',
+ 'Paddock crop plans, inputs, spray and chemical logs, yields and agronomy records for cropping areas.',
+ 'Income, expenses, gross margins and accounting export or sync (for example Xero, MYOB) tied to livestock and crop activity.',
+ 'Run several properties under one login with consolidated stock, paddock maps and reporting.',
+ 'Assign and track tasks across a team and keep working in the paddock with no mobile signal.',
+ 'Joining, pregnancy testing, calving or lambing, marking and weaning records, plus fertility reporting.',
+ 'Links to sale platforms, saleyards and marketplaces to list, sell or price stock.'
+];
+const D = {
+mobble:[
+ 'Core feature, included in every plan.',
+ 'Core feature: reconciliation by mob and property, included in every plan.',
+ 'Gap: mob-level records only, no individual animal or eID. Largest competitive exposure ahead of sheep eID rules from 1 Jan 2027 in NSW, Qld, SA, Tas, ACT.',
+ 'Partial: weight records at mob level. Live weights from scales are not supported yet; Optiweigh integration is planned.',
+ 'Native: treatment records included. Withholding alerts not verified.',
+ 'Partial: records can support LPA audits. No eNVD generation.',
+ 'Gap: no NLIS submission.',
+ 'Partial: movement and treatment history gives an audit trail. No dedicated biosecurity plan module (unverified).',
+ 'Gap: records what happened, no forward grazing planner.',
+ 'Gap: no feed budget or satellite pasture data.',
+ 'Integration with Farmbot and Farmo (no extra charge from Mobble). Hardware is priced by those vendors.',
+ 'Gap: no virtual fencing.',
+ 'Partial: basic cropping records. Two-way Agworld integration covers agronomy (no extra Mobble charge).',
+ 'Gap: no financials or accounting sync.',
+ 'Native: unlimited properties in every plan.',
+ 'Native: tasks and team members (Core: 2 team + 2 connect; Team plan: unlimited). Offline use not verified.',
+ 'Partial: basic breeding records (unverified depth).',
+ 'Gap.'],
+agriwebb:[
+ 'Native in Essentials (from about A$340/yr at 250 sheep equivalents).',
+ 'Native in Essentials: real-time inventory and reconciliation.',
+ 'Native in Essentials: manage by mob or individual animal.',
+ 'Paid tier: treatment and weight records start at Compliance (about 1.4x Essentials, e.g. A$1,673/yr at 1,000 cattle). Weight projections need Performance (1.8x, A$2,151).',
+ 'Paid tier: treatment records from Compliance (1.4x Essentials, about A$1,673/yr at 1,000 cattle).',
+ 'Paid tier: audit tools and eNVD generation from Compliance (1.4x Essentials).',
+ 'Paid tier: one-way NLIS submission from Compliance (1.4x Essentials).',
+ 'Paid tier: audit and biosecurity tools from Compliance (1.4x Essentials).',
+ 'Paid tier: grazing management in Performance (1.8x Essentials, e.g. A$2,151/yr at 1,000 cattle) or A$300/yr Grazing Planning add-on.',
+ 'Integration: Cibo Labs satellite pasture data (PastureKey from about US$1,000/yr, separate subscription).',
+ 'Integration: hardware and sensors including Farmbot. Hardware cost is separate.',
+ 'Gap (no native virtual fencing found).',
+ 'Paid tier: cropping records from Compliance (1.4x Essentials).',
+ 'Paid tier: financial reporting in Performance (1.8x). Xero link also available (extra setup).',
+ 'Native: unlimited farms, users and devices on every plan.',
+ 'Native: team and tasks included. Offline sync supported (unverified).',
+ 'Paid tier: joining, pregnancy scan and fertility in Compliance or Performance.',
+ 'Gap.'],
+atlas:[
+ 'Native in Core (mobs, paddocks, graze chart). Core is about A$36/mo assumed, limited to 1 property.',
+ 'Partial: tracks mobs and feed inventory, no formal reconciliation found.',
+ 'Gap: no individual animal records.',
+ 'Gap.','Gap.','Gap: no compliance module.','Gap.','Gap.',
+ 'Paid tier: graze chart in Core, paddock rating planner and forecasting need Management (about A$115/mo assumed, A$1,380/yr).',
+ 'Paid tier: feed on offer planner in Performance (about A$156/mo assumed, A$1,872/yr).',
+ 'Native: rainfall records included in Core.',
+ 'Gap.','Gap.','Gap.',
+ 'Paid tier: Core covers 1 property; unlimited properties need Management (about A$115/mo assumed).',
+ 'Native: tasks and unlimited users in Core.',
+ 'Gap.','Gap.'],
+farmiq:[
+ 'Paid tier: mob recording and movements in Performance+ (about NZ$190/farm/mo).',
+ 'Paid tier: stock changes in Essentials (NZ$84/farm/mo); reconciliation in Performance+ (NZ$190).',
+ 'Paid tier: EID and individual animal history in Pro (about NZ$249/farm/mo).',
+ 'Paid tier: liveweights in Performance+ (about NZ$190/farm/mo).',
+ 'Paid tier: treatments in Essentials (about NZ$84/farm/mo).',
+ 'Partial: NZ regime (not LPA/NVD). Health and safety and farm plans in Lite (NZ$42).',
+ 'Paid tier: NAIT recording from Essentials (NZ$84/farm/mo). NZ only.',
+ 'Partial: H&S and farm plan tools in Lite (NZ$42/farm/mo).',
+ 'Partial: farm plans and mapping, limited rotational planning (unverified).',
+ 'Partial: feed tools at Performance level (unverified).',
+ 'Gap.','Gap.','Gap: no cropping module found.',
+ 'Integration: accounting integration (unverified).',
+ 'Paid tier: multiple farms allowed, 2nd and 3rd farm at 25% off each pack.',
+ 'Native: farm diary and tasks (even Lite).',
+ 'Paid tier: breeding records at Essentials and above.',
+ 'Gap.'],
+breedr:[
+ 'Native in Starter (A$50/mo).','Native in Starter (A$50/mo).','Native: individual animal records in Starter.',
+ 'Native: quick weigh included.','Native: medicines recording included.',
+ 'Partial: compliance reporting varies by market (unverified for AU).',
+ 'Partial: NLIS link not verified for AU.','Partial: movement records and biosecurity logs (unverified).',
+ 'Gap.','Gap.','Gap.','Gap.','Gap.','Gap.',
+ 'Native: multi-species, multiple holdings supported (unverified limits).',
+ 'Partial: mobile app, offline use not verified.',
+ 'Partial: basic breeding records (unverified).',
+ 'Native: Breedr marketplace for selling stock.'],
+halter:[
+ 'Native: virtual-fence mob movements create grazing history automatically.',
+ 'Partial: herd counts from collars, not a reconciliation ledger.',
+ 'Native: each collar tracks an individual animal.',
+ 'Partial: activity and body-condition indicators; scale integration (unverified).',
+ 'Gap.','Gap.','Gap.','Gap.',
+ 'Paid tier: Beef Pro (AU launch 30 Jun 2026) adds grazing planning, on top of about US$8/collar/month.',
+ 'Partial: grazing history, no satellite feed budget (unverified).',
+ 'Partial: water and herd alerts (unverified).',
+ 'Native: the core product. About US$5-10 per collared head per month, hardware included, about US$1,500 startup.',
+ 'Gap.','Gap.',
+ 'Native: multiple farms in one account.',
+ 'Partial: mobile app control of fencing, tasks limited.',
+ 'Partial: heat and health alerts (strongest in dairy).',
+ 'Gap.'],
+herdwatch:[
+ 'Partial: movements logged, paddock grazing history is limited (unverified).',
+ 'Native: stock register and reconciliation.','Native: individual animal register.','Native: weights and performance.','Native: medicine records with withdrawal alerts.',
+ 'Partial: designed for EU/UK schemes, not LPA/eNVD.',
+ 'Gap for AU: no NLIS submission (UK/IE schemes only).','Partial: biosecurity and audit records for EU schemes.',
+ 'Gap.','Gap.','Gap.','Gap.','Gap.','Gap.',
+ 'Partial: multiple holdings (unverified). Not sold in AU/NZ.',
+ 'Partial: offline app, team features limited (Capterra: about EUR79 per user per year).',
+ 'Native: breeding, calving and lambing records.','Gap.'],
+stockbook:[
+ 'Native in all tiers.','Native in all tiers.','Native: individual animal, pedigree and EBVs.','Native: weights.','Native: treatments and withholding.',
+ 'Partial: LPA records (unverified); eNVD not verified.',
+ 'Native: NLIS link and saleyard links.','Partial: biosecurity records (unverified).',
+ 'Gap.','Gap.','Gap.','Gap.','Gap.','Gap.',
+ 'Native: multiple properties (unverified).',
+ 'Partial: Stockhand mobile app (offline unverified).',
+ 'Native: breeding and pedigree.',
+ 'Integration: saleyard links.'],
+phoenix:[
+ 'Paid module: Livestock module (A$90/mo Live first module; Desktop A$57/mo; GST inc).',
+ 'Paid module: Livestock module.',
+ 'Paid module: Livestock module, individual animal records.',
+ 'Paid module: Livestock module.','Paid module: Livestock module.',
+ 'Partial: LPA and NVD records; eNVD not verified.',
+ 'Paid module: NLIS via Livestock module (extra modules A$23/mo Live, A$29/mo Desktop).',
+ 'Partial: audit records (unverified).',
+ 'Gap: no paddock grazing planner.','Gap.','Gap.','Gap.',
+ 'Paid module: Cropping (A$90/mo first module Live, or +A$23/mo as an extra module; Desktop +A$29/mo; GST inc).',
+ 'Paid module: Financials (Live Pro from A$90/mo, Desktop Pro A$77/mo, Lite A$57/mo; GST inc).',
+ 'Partial: multiple books at +A$17/mo each on Live; extra users +A$63/mo plus A$198 setup per user.',
+ 'Partial: per-user fees and setup apply; Desktop/Live trade-off.',
+ 'Paid module: Livestock module.','Gap.'],
+cattlemax:[
+ 'Native: mobs and pasture maps (US$216/yr up to 100 head).',
+ 'Native: herd records and counts.','Native: individual animal records.','Native: weights.','Native: treatments and health.',
+ 'Partial: US-oriented compliance records.','Gap for AU: no NLIS.',
+ 'Partial: records only (unverified).',
+ 'Partial: pasture maps and grazing logs, no forward planner.',
+ 'Gap.','Gap.','Gap.','Gap.',
+ 'Partial: income and expense log (no accounting sync).',
+ 'Partial: multiple herds or pastures (unverified).',
+ 'Native: tasks, unlimited users.',
+ 'Native: breeding, calving records.','Gap.']
+};
+return {JOBDESC, D};
+})();
+
+;
+// ANZ market-scan extension. Each vendor file calls ANZ.add({...}); anz_apply.js then appends the vendors to FEAT and MODEL.
+// Vendor shape: { id, name, kind, cur, species, region, color, base, blurb, SRC:{key:'source'}, price(c, FX, R), cells:[[code, caveat, srcKey] x 63], profile:'markdown' }
+const ANZ = (function () {
+  const L = [];
+  const R = (lo, mid, hi, flags, note) => ({ low: lo, mid: mid, high: hi, flags: flags || [], note: note || '' });
+  function add(v) { L.push(v); }
+  function apply(FEAT, MODEL) {
+    L.forEach(v => {
+      if (FEAT.V.includes(v.id)) return;
+      if (!v.cells || v.cells.length !== FEAT.F.length) throw new Error(v.id + ': expected ' + FEAT.F.length + ' cells, got ' + (v.cells ? v.cells.length : 0));
+      FEAT.V.push(v.id);
+      const vi = FEAT.V.length - 1;
+      FEAT.BASE[v.id] = v.base;
+      FEAT.F.forEach((f, i) => {
+        const [k, cav, sk] = v.cells[i];
+        if (!'NPIHGU'.includes(k) || k.length !== 1) throw new Error(v.id + ' cell ' + i + ' bad code ' + k);
+        if (sk && !v.SRC[sk]) throw new Error(v.id + ' cell ' + i + ' unknown source ' + sk);
+        f.r += k;
+        if (f.prev) f.prev += k;
+        f.c[vi] = cav || '';
+        if (sk) (f.src = f.src || {})[v.id] = v.SRC[sk];
+      });
+      MODEL.VENDORS.push({ id: v.id, name: v.name, kind: v.kind, cur: v.cur, species: v.species, region: v.region, anz: true, blurb: v.blurb, noChart: !!v.noChart, chartNote: v.chartNote || '', star: v.star || '' });
+      MODEL.PRICE[v.id] = c => v.price(c, MODEL.FX, R);
+    });
+  }
+  return { add, apply, L };
+})();
+if (typeof module !== 'undefined') module.exports = ANZ;
+
+;
+// P2P Agri (p2pagri.com.au). Researched 10 Nov 2026 from pricing, 15 feature pages, product updates and the resources index. No public help centre.
+ANZ.add({
+  id: 'p2pagri', name: 'P2P Agri', kind: 'Overlap (finance-led planning)', cur: 'AUD inc GST', species: 'both', region: 'AU',
+  color: '#6b8e23',
+  angle: 'Integration partner more than rival: shared audience, different job (planning and finance vs daily records)',
+  links: [['Pricing', 'https://p2pagri.com.au/pricing'], ['Features', 'https://p2pagri.com.au/features'], ['Livestock', 'https://p2pagri.com.au/features/livestock-management'], ['Pasture', 'https://p2pagri.com.au/features/pasture-management'], ['Farm mapping', 'https://p2pagri.com.au/features/farm-mapping'], ['Crop gross margin', 'https://p2pagri.com.au/features/crop-gross-margin'], ['Rainfall', 'https://p2pagri.com.au/features/rainfall-tracking'], ['Mobile', 'https://p2pagri.com.au/features/mobile-farm-management'], ['Adviser collaboration', 'https://p2pagri.com.au/features/adviser-collaboration'], ['Product updates', 'https://p2pagri.com.au/product-updates'], ['Resources', 'https://p2pagri.com.au/resources']],
+  base: 'Included in Season (A$89/month inc GST). The free Essentials plan covers financials only, so Season is treated as the base tier here.',
+  blurb: 'Australian farm business planning software. Claims 2,000+ farms. Livestock is counted by enterprise for budgets and gross margins, not recorded by mob day to day.',
+  SRC: {
+    pr: 'p2pagri.com.au/pricing',
+    ft: 'p2pagri.com.au/features',
+    lm: 'p2pagri.com.au/features/livestock-management',
+    pm: 'p2pagri.com.au/features/pasture-management',
+    fm: 'p2pagri.com.au/features/farm-mapping',
+    cg: 'p2pagri.com.au/features/crop-gross-margin',
+    cm: 'p2pagri.com.au/features/crop-marketing',
+    rf: 'p2pagri.com.au/features/rainfall-tracking',
+    mo: 'p2pagri.com.au/features/mobile-farm-management',
+    ad: 'p2pagri.com.au/features/adviser-collaboration',
+    pu: 'p2pagri.com.au/product-updates (2.0.0 to 2.5.0, Jun to Sep 2026)',
+    rs: 'p2pagri.com.au/resources (54 articles checked)',
+  },
+  price(c, FX, R) {
+    const g = 1 / 1.1, ann = 0.92;
+    const season = 89 * 12 * g, future = 135 * 12 * g;
+    return R(season * ann, future * ann, future, ['flat-price'], 'Flat price per farm business: Season A$89/mo, Future A$135/mo inc GST (most popular), about 8% off annually. No herd, user or property limits published. Low = Season annual, Mid = Future annual, High = Future monthly');
+  },
+  cells: [
+    /* 0 drag-drop moves */ ['G', 'The map colours paddocks by gross margin per hectare. No mob locations or moves on it.', 'fm'],
+    /* 1 grazing history */ ['G', 'Not found. Pasture pages cover carrying capacity and costs, not grazing days.', 'pm'],
+    /* 2 open gates */ ['G', 'Not found.', 'pm'],
+    /* 3 split/merge */ ['G', 'Transfers between enterprises keep the reconciliation balanced. There are no mob drafts.', 'lm'],
+    /* 4 offline map */ ['G', 'Browser only. P2P Agri "needs an internet connection".', 'mo'],
+    /* 5 reconciliation */ ['N', 'Opening numbers, births, purchases, sales, deaths and transfers to closing. "The reconciliation balances automatically." By enterprise and class, not by mob.', 'lm'],
+    /* 6 births/deaths */ ['N', 'Births, weaning and deaths entered as numbers in the enterprise reconciliation.', 'lm'],
+    /* 7 sales/purchases */ ['N', 'Sale price, buyer and commission; livestock sales can be logged from a phone browser.', 'mo'],
+    /* 8 classes/bulk */ ['H', '17+ enterprise templates with DSE ratings per class. Ageing up and bulk actions not documented.', 'lm'],
+    /* 9 totals/stocking graphs */ ['N', 'Head counts and stocking rate per hectare in DSE (switchable to LSU, AE or NZ SU since 2.4.0).', 'pu'],
+    /* 10 individual profiles */ ['G', 'Livestock is managed by head count and enterprise only.', 'lm'],
+    /* 11 EID */ ['G', 'Not found.', 'lm'],
+    /* 12 lifetime history */ ['G', 'Not found.', 'lm'],
+    /* 13 pedigree */ ['G', 'Not found.', 'lm'],
+    /* 14 weights */ ['G', 'Not found.', 'lm'],
+    /* 15 scales */ ['G', 'Not found.', 'lm'],
+    /* 16 ADG */ ['G', 'Not found.', 'lm'],
+    /* 17 treatments */ ['G', 'Animal health (vet, drench, vaccination) is a cost line in the gross margin, not a dated treatment record.', 'lm'],
+    /* 18 WHP */ ['G', 'Not found.', 'lm'],
+    /* 19 medicine inventory */ ['G', 'Not found.', 'lm'],
+    /* 20 LPA */ ['G', 'Not found on any feature page, release note or article.', 'rs'],
+    /* 21 eNVD */ ['G', 'Not found.', 'rs'],
+    /* 22 sale from NVD */ ['G', 'Not found.', 'rs'],
+    /* 23 NLIS submit */ ['G', 'Not found.', 'rs'],
+    /* 24 NLIS recon */ ['G', 'Not found.', 'rs'],
+    /* 25 biosecurity plan */ ['G', 'Not found.', 'rs'],
+    /* 26 audit trail */ ['G', 'Not found.', 'ft'],
+    /* 27 hazard map */ ['G', 'Not found on the mapping page.', 'fm'],
+    /* 28 adviser access */ ['N', 'Invite advisers, accountants, partners and family by email, each with view or edit access. Advisers need no paid plan to view; an accreditation program gives them unlimited client accounts.', 'ad'],
+    /* 29 forward planner */ ['G', 'Not found. Planning here means cash flow and enterprise scenarios, not paddock rotations.', 'pm'],
+    /* 30 target rest */ ['G', 'Not found.', 'pm'],
+    /* 31 SR vs capacity */ ['N', 'Carrying capacity in DSE/ha from paddock area and pasture type (100+ varieties), compared with actual stocking rate to show spare capacity or overstocking.', 'pm'],
+    /* 32 plan to tasks */ ['G', 'Not found.', 'pm'],
+    /* 33 pasture cover */ ['G', 'Not found. Pasture is rated by variety and carrying capacity, not measured cover.', 'pm'],
+    /* 34 satellite pasture */ ['G', 'Satellite imagery is used only to draw paddock boundaries.', 'fm'],
+    /* 35 feed budget */ ['H', 'DSE demand modelled against pasture and feed supply, and projected up to 5 years in Future. No feed-on-offer or growth-rate budget.', 'lm'],
+    /* 36 feed inventory */ ['G', 'Supplementary feeding is tracked as a cost, not as feed on hand.', 'lm'],
+    /* 37 rainfall */ ['N', 'Your own gauge plus SILO history back to 1900, decile bands and wet, middle and dry finishes. One gauge per farm described.', 'rf'],
+    /* 38 tank sensors */ ['G', 'Not found.', 'rf'],
+    /* 39 weather/soil */ ['H', 'Automatic SILO rainfall import, a live weather widget and a 7-day forecast. No on-farm station or soil probe link.', 'rf'],
+    /* 40 virtual fence */ ['G', '', ''],
+    /* 41 location */ ['G', '', ''],
+    /* 42 sowing */ ['H', 'Each paddock carries a crop enterprise and seed cost for the season. No dated sowing records.', 'cg'],
+    /* 43 spray log */ ['G', 'Seed, fertiliser and chemical are cost totals per hectare, "not dated application logs".', 'cg'],
+    /* 44 harvest */ ['H', 'Yields and tonnage per product (multi-product crops roll up to one gross margin), plus a pre-harvest tonnage calculator. No harvest-event records.', 'cg'],
+    /* 45 crop GM */ ['N', 'Gross margin per hectare by crop and paddock, Water Use Efficiency benchmark, grain marketing and contract tracking.', 'cg'],
+    /* 46 agronomy link */ ['H', 'Imports paddock boundaries from Agworld, Back Paddock, Google Earth, shapefile, KML and yield-map files (2.5.0). File import only, no live sync.', 'pu'],
+    /* 47 income/expense */ ['N', 'Core of the product: monthly cash flow, planned vs actual, P&L and balance sheet, 40+ reports.', 'pr'],
+    /* 48 accounting sync */ ['N', 'Direct Xero connection (free tier up); MYOB and others via Excel P&L and balance sheet import.', 'ft'],
+    /* 49 GM / CoP */ ['N', 'Gross margin per DSE and per hectare for livestock, compared side by side with crops; paddock map shaded by margin.', 'lm'],
+    /* 50 multi-property */ ['N', 'Each property gets its own map and paddocks under one business.', 'fm'],
+    /* 51 consolidated */ ['N', 'Financials report at business level, with each farm\'s performance shown separately.', 'fm'],
+    /* 52 no per-property fee */ ['N', 'Priced per farm business. The pricing page lists no per-property fee.', 'pr'],
+    /* 53 tasks */ ['G', 'Not found.', 'ft'],
+    /* 54 geo tasks */ ['G', 'Not found.', 'ft'],
+    /* 55 roles */ ['H', 'Two access levels per invited person (view or edit). No role templates.', 'ad'],
+    /* 56 offline */ ['G', 'Browser only, needs a mobile signal.', 'mo'],
+    /* 57 unlimited users */ ['N', 'A business can be shared with several people, each with their own login. No per-user fee is published.', 'ad'],
+    /* 58 joining */ ['G', 'Not found.', 'lm'],
+    /* 59 preg scan */ ['G', 'Not found.', 'lm'],
+    /* 60 calving/marking/weaning */ ['H', 'Births and weaning counted for the reconciliation. No marking or weaning event records.', 'lm'],
+    /* 61 marketplace */ ['G', 'Marketing planning covers grain sales timing and contracts only; no saleyard or AuctionsPlus link.', 'cm'],
+    /* 62 kill sheet */ ['G', 'Not found.', 'cm'],
+  ],
+  profile: `### P2P Agri (AU)
+
+**What it is.** Farm business planning software built around cash flow, profit and loss, balance sheet and bank ratios, with livestock, pasture, cropping and mapping layered on top. It claims "2,000+ farms", 20+ years in the market and an accredited adviser network. Partners listed are GRDC, Xero, Tocal College and the University of Melbourne. Mike Krause presents its podcast series and training, and the company says it has delivered 234+ workshops and written three books.
+
+**Pricing (AUD inc GST).** Essentials is free (financials, Xero connection, cash flow budget, scenarios). Season is A$89/month and adds livestock and pasture, paddocks and cropping, rainfall deciles and marketing. Future is A$135/month, is marked most popular, and adds 5-year projections and side-by-side scenarios. Annual billing saves about 8%. There are no herd, user or property limits on the page. Accredited advisers get unlimited client accounts.
+
+**How it covers the jobs.** Livestock is handled as head counts by enterprise: opening to closing reconciliation, births, sales, deaths, DSE stocking rate and gross margin per DSE and per hectare. Pasture is rated by variety and carrying capacity, then compared with stocking rate. The map draws paddocks on Google imagery and shades them by margin. There are no mobs on the map, no moves, treatments or chemical records, no NLIS or NVD work and no offline mode. It runs in a browser and the product is rebuilt for mobile (2.0.0, June 2026).
+
+**What it means for Mobble.** The audience overlaps (mixed livestock and cropping family farms) but the job doesn't. P2P Agri answers "will this plan make money and satisfy the bank"; Mobble answers "where are my mobs and are my records audit-ready". A farmer could run both, and P2P Agri's numbers (head counts by class, sales, stocking rate, paddock areas) are exactly what Mobble already captures. That makes it a plausible integration partner, a feed from Mobble's reconciliation into P2P Agri's budgets, more than a feature-for-feature rival. The risk to watch is P2P Agri adding mob recording on top of a planning base that farmers and advisers already pay for.
+
+**Evidence gaps.** There's no public help centre. Ratings come from 15 feature pages, the pricing page, release notes 2.0.0 to 2.5.0 and the titles of 54 resource articles. Per-user and per-property charges aren't stated anywhere.
+`,
+});
+
+;
+// Livestock Library (livestocklibrary.com.au). Researched 10 Nov 2026 from pricing, features table, 12 platform pages and the articles index. No separate help centre.
+ANZ.add({
+  id: 'livestocklibrary', name: 'Livestock Library', kind: 'Direct (cattle, mob + individual)', cur: 'AUD', species: 'cattle', region: 'AU',
+  color: '#8b4513',
+  noChart: true, chartNote: 'currently Free',
+  angle: 'Direct rival for cattle. Its own pitch names Mobble\'s missing EID tracking, and it is free at every herd size for now',
+  links: [['Pricing', 'https://www.livestocklibrary.com.au/pricing'], ['Features', 'https://www.livestocklibrary.com.au/features'], ['Animals and mobs', 'https://www.livestocklibrary.com.au/platform/animals-mobs'], ['Compliance and movements', 'https://www.livestocklibrary.com.au/platform/compliance-movements'], ['Health and treatments', 'https://www.livestocklibrary.com.au/platform/health-treatments'], ['Weights', 'https://www.livestocklibrary.com.au/platform/weights-performance'], ['The books', 'https://www.livestocklibrary.com.au/platform/the-books'], ['Offline app', 'https://www.livestocklibrary.com.au/platform/offline-field-app'], ['Multi-property', 'https://www.livestocklibrary.com.au/platform/multi-property'], ['Agistment and land', 'https://www.livestocklibrary.com.au/platform/agistment'], ['Biosecurity', 'https://www.livestocklibrary.com.au/platform/biosecurity'], ['Jobs', 'https://www.livestocklibrary.com.au/platform/jobs'], ['Team', 'https://www.livestocklibrary.com.au/platform/team'], ['Reproduction', 'https://www.livestocklibrary.com.au/platform/reproduction'], ['Articles', 'https://www.livestocklibrary.com.au/articles']],
+  base: 'Included in the Family tier (200 to 2,000 head), free for now. Hobby (up to 200 head) lacks costs, gross margin and team; Station (2,000+) adds multi-property roll-up.',
+  blurb: 'Australian cattle records app: mob and individual EID in one record set, NLIS and NVD drafting, treatments with WHP and ESI, offline iPhone app. Free at every size while it grows.',
+  SRC: {
+    pr: 'livestocklibrary.com.au/pricing',
+    hp: 'livestocklibrary.com.au (home)',
+    ft: 'livestocklibrary.com.au/features (live / on the way table)',
+    am: 'livestocklibrary.com.au/platform/animals-mobs',
+    cm: 'livestocklibrary.com.au/platform/compliance-movements',
+    of: 'livestocklibrary.com.au/platform/offline-field-app',
+    mp: 'livestocklibrary.com.au/platform/multi-property',
+    ag: 'livestocklibrary.com.au/platform/agistment',
+    bk: 'livestocklibrary.com.au/platform/the-books',
+    bs: 'livestocklibrary.com.au/platform/biosecurity',
+    ht: 'livestocklibrary.com.au/platform/health-treatments',
+    wp: 'livestocklibrary.com.au/platform/weights-performance',
+    jb: 'livestocklibrary.com.au/platform/jobs',
+    rp: 'livestocklibrary.com.au/platform/reproduction',
+    tm: 'livestocklibrary.com.au/platform/team',
+    ar: 'livestocklibrary.com.au/articles (398 research summaries, none on product)',
+  },
+  price(c, FX, R) {
+    if (c.cattle === 0) return null;
+    return R(0, 0, 0, ['free-for-now', 'cattle-only'], 'Free at every herd size while the product grows. Paid plans will be a flat monthly fee by herd size, prices not yet published; Enterprise is a custom contract');
+  },
+  cells: [
+    /* 0 drag-drop moves */ ['H', 'Mobs move into paddocks and start accruing grazing days, but there is no farm map.', 'ag'],
+    /* 1 grazing history */ ['H', 'Grazing days accrue per paddock and per mob automatically. Days rested aren\'t named.', 'ag'],
+    /* 2 open gates */ ['G', 'Not found.', 'ft'],
+    /* 3 split/merge */ ['N', '"Draft, move, treat and weigh a whole mob in one action in the yards", with dated mob membership.', 'am'],
+    /* 4 offline map */ ['H', 'Moves work offline in the iPhone app; there is no map to view.', 'of'],
+    /* 5 reconciliation */ ['N', 'Trading statement from opening stock, natural increase, purchases, sales and deaths to closing, "reconciled to the herd", with valuations by class.', 'bk'],
+    /* 6 births/deaths */ ['N', 'Calvings tied to dams; deaths update head count and the trading statement automatically.', 'ht'],
+    /* 7 sales/purchases */ ['N', 'Account sales and purchases with tags, weights and price, posted straight to the trading statement.', 'bk'],
+    /* 8 classes/bulk */ ['N', 'Herd classification from the record and whole-mob actions in the yards.', 'ft'],
+    /* 9 totals/SR graphs */ ['H', 'Head and mob totals per property and rolled up. Stocking rate graphs not described.', 'mp'],
+    /* 10 individual */ ['N', 'NLIS/EID and visual tags, breed, sex, DOB, sire and dam, current mob and property. Mob and individual on the same animals, no separate plan.', 'am'],
+    /* 11 EID reader */ ['H', 'Bluetooth reader and scale pairing is "still in development". Tags come in by CSV import or lookup.', 'of'],
+    /* 12 lifetime history */ ['N', 'Scan a tag to see "every mob it\'s been in, every treatment, every weight, its breeding and its movements".', 'am'],
+    /* 13 pedigree */ ['H', 'Sire and dam recorded against each calf. EBVs and genomics not covered.', 'rp'],
+    /* 14 weights */ ['N', 'Weigh sessions matched by EID, typed on the phone or imported; mob figures roll up from individuals, with weighed-vs-missing checks.', 'wp'],
+    /* 15 scales */ ['H', 'CSV import from Gallagher, Tru-Test and spreadsheets. No live scale link.', 'wp'],
+    /* 16 ADG */ ['H', 'ADG per animal and per mob from actual weigh dates; flags poor doers. No weight projections or forecast sale dates.', 'wp'],
+    /* 17 treatments */ ['N', 'Treatment, vaccination, illness, injury and mortality, by mob or animal; mob treatments apply to members at that moment.', 'ht'],
+    /* 18 WHP/ESI */ ['N', 'WHP clear-from date per animal, and ESI from cabinet products. A movement document can\'t be approved while an animal is in withholding.', 'ht'],
+    /* 19 medicine inventory */ ['H', 'A medicine cabinet supplies WHP and ESI days. Batch, expiry and stock on hand not described.', 'ht'],
+    /* 20 LPA */ ['H', 'Biosecurity plan and visitor register for LPA requirement 6, plus treatment and WHP records. No LPA audit pack, and no chemical or fodder records.', 'bs'],
+    /* 21 eNVD */ ['H', 'NVD-shaped documents drafted from records and frozen at generation; "nothing is auto-submitted". Live eNVD integration is "on the way".', 'cm'],
+    /* 22 sale from NVD */ ['H', 'The movement document is drafted from the recorded movement, so the two match. Submitting an eNVD can\'t write the sale yet.', 'cm'],
+    /* 23 NLIS submit */ ['H', 'PIC-to-PIC transfers recorded in NLIS shape with overdue alerts per property. Lodgement with NLIS is "on the way".', 'ft'],
+    /* 24 NLIS recon */ ['H', 'Overdue NLIS transfers flagged per property and across the company. NLIS file import and database reconciliation not described.', 'mp'],
+    /* 25 biosecurity plan */ ['N', 'Farm biosecurity plan held against each property as a living document, with a gate sign-in visitor register.', 'bs'],
+    /* 26 audit trail */ ['H', 'Corrections are recorded as new linked events and documents are frozen when generated. A who-did-what log isn\'t described.', 'ft'],
+    /* 27 hazard map */ ['G', 'No map.', 'bs'],
+    /* 28 adviser access */ ['N', 'Read-only accountant and vet roles, plus a jobs-only login for carriers, vets and fencers.', 'tm'],
+    /* 29 forward planner */ ['G', 'Not found.', 'ag'],
+    /* 30 target rest */ ['G', 'Not found.', 'ag'],
+    /* 31 SR vs capacity */ ['G', 'Shows what each paddock carries and its land condition, without a carrying-capacity comparison.', 'ag'],
+    /* 32 plan to tasks */ ['G', 'Not found.', 'ag'],
+    /* 33 pasture cover */ ['H', 'Repeatable land-condition assessments with photo points per paddock. No kg DM/ha.', 'ag'],
+    /* 34 satellite */ ['G', 'Not found.', 'ft'],
+    /* 35 feed budget */ ['G', 'Not found.', 'ft'],
+    /* 36 feed inventory */ ['N', 'Feed catalogue, orders, deliveries and stock on hand.', 'ft'],
+    /* 37 rainfall */ ['G', 'Not found.', 'ft'],
+    /* 38 tanks */ ['G', 'Not found.', 'ft'],
+    /* 39 weather/soil */ ['G', 'Not found.', 'ft'],
+    /* 40 virtual fence */ ['G', '', ''],
+    /* 41 location */ ['G', '', ''],
+    /* 42 sowing */ ['G', 'No cropping features.', 'ft'],
+    /* 43 spray log */ ['G', 'No spray or fertiliser records.', 'ft'],
+    /* 44 harvest */ ['G', 'No cropping features.', 'ft'],
+    /* 45 crop GM */ ['G', 'No cropping features.', 'ft'],
+    /* 46 agronomy */ ['G', 'No integrations listed beyond CSV import.', 'ft'],
+    /* 47 income/expense */ ['N', 'Variable cost ledger (health, freight, agistment, feed) plus account sales and settlements, exportable to CSV or Excel.', 'bk'],
+    /* 48 accounting sync */ ['G', 'Export only, shaped for a livestock accountant. No Xero or MYOB link.', 'bk'],
+    /* 49 GM / CoP */ ['N', 'Gross margin computed by code, flagged when costs are missing; stock valuations by class. Cost of production not named.', 'bk'],
+    /* 50 multi-property */ ['N', 'Several properties per account with property-by-property access. The roll-up view is Station tier.', 'mp'],
+    /* 51 consolidated */ ['P', 'Head, mobs and overdue NLIS across every property on one screen, financials rolled up and gated by role. Station tier (2,000+ head), free for now.', 'pr'],
+    /* 52 no per-property fee */ ['N', 'Paid tiers will be priced by live head, not properties. Enterprise contracts factor in property count.', 'pr'],
+    /* 53 tasks */ ['N', 'Jobs with owner or team queue, due date, steps, checklists, photos, repeats and in-app reminders.', 'ft'],
+    /* 54 geo tasks */ ['H', 'Jobs belong to a property and can be created from a paddock note. No map pins.', 'jb'],
+    /* 55 roles */ ['N', 'Five roles (owner, manager, farmhand, vet, read-only accountant) set per property, with a separate money gate checked on the server.', 'tm'],
+    /* 56 offline */ ['N', 'Native iPhone app works with no signal and saves on the device first; conflict register on sync. Android "to follow".', 'of'],
+    /* 57 unlimited users */ ['N', 'Paid tiers include the whole team and are charged by operation size, not by user.', 'pr'],
+    /* 58 joining */ ['N', 'Joining to bulls or AI with joining period.', 'ft'],
+    /* 59 preg scan */ ['N', 'Pregnancy test (PTIC) results logged.', 'rp'],
+    /* 60 calving/weaning */ ['N', 'Calving tied to dam, weaning and weaning rate against females actually joined. Marking not described.', 'rp'],
+    /* 61 marketplace */ ['G', 'Not found.', 'ft'],
+    /* 62 kill sheet */ ['G', 'Not found.', 'ft'],
+  ],
+  profile: `### Livestock Library (AU)
+
+**What it is.** An Australian-built cattle records platform that runs mob and individual EID records on the same animals, with no separate plans for each. It covers NLIS-shaped PIC-to-PIC transfers, NVD-shaped document drafting, treatments with WHP and ESI clocks, weights and ADG, joining to weaning, a livestock trading statement and gross margin, jobs, agistment head-days, a biosecurity plan with a gate visitor register, and an AI assistant that turns dictated paddock notes into draft records. The iPhone app works fully offline; Android is "to follow". It publishes about 400 livestock research summaries as content. The site names no founders, team, ABN, address or About page, and gives no founding date or customer numbers.
+
+**Pricing.** Free at every herd size "while we grow it", with no card. The tiers are bands by live head: Hobby up to 200, Family 200 to 2,000, Station 2,000 to 10,000+, and Enterprise by contract. Paid plans will be a flat monthly fee by herd size, charged by operation size and not per user, with prices set at launch. Records stay readable and exportable on any plan.
+
+**How it covers the jobs.** It's strong on individual animals, treatments and withholding, breeding, team roles and offline work. Compliance is half-built: NVDs are drafted but not lodged, NLIS transfers are tracked but not submitted, and live eNVD and NLIS integration is listed as "on the way". There's no farm map, rainfall, pasture measurement or cropping. Sheep aren't mentioned anywhere, so it's treated as cattle-only here.
+
+**What it means for Mobble.** This is the most pointed rival in the scan. Its animals-and-mobs page says Mobble "does mobs but has no individual EID tracking at all", and it sells "no split plans for mob vs individual" against AgriWebb. It's built on the exact gap Mobble's own help centre admits, and it's free. Mobble still wins on the map, grazing history, rainfall, cropping and chemical records, sheep, and working compliance today. Its exposure is cattle producers who want EID without paying AgriWebb prices. With no published team or paid pricing, it reads more like an experiment testing demand than an established business, so treat it as a signal that cattle producers want cheap mob-plus-EID records. The questions to watch are whether a team and paid plans appear, and whether it adds sheep and a map. It's left off the dashboard's cost charts for that reason and listed under them as currently free.
+
+**Evidence gaps.** There's no help centre or changelog beyond app version notes on the platform pages. Ratings come from the features table (live vs on the way), 12 platform pages and the pricing FAQ. Medicine batch and expiry tracking, audit logs and stocking rate graphs aren't described.
+`,
+});
+
+;
+// FARMap (farmap.com.au). Researched 10 Nov 2026 from home, features, pricing, support hub, news and release posts, App Store listing, NSW DPI AgTech Finder and Farm Online coverage.
+ANZ.add({
+  id: 'farmap', name: 'FARMap', kind: 'Direct (map-first, mob-based)', cur: 'AUD inc GST', species: 'both', region: 'AU',
+  color: '#d2691e',
+  angle: 'Closest like-for-like for family farms: map-first and mob-based, with every feature, unlimited users and unlimited farms for about A$400 a year',
+  links: [['Home', 'https://www.farmap.com.au/'], ['Features', 'https://www.farmap.com.au/features'], ['Pricing', 'https://www.farmap.com.au/pricing-signup'], ['Support hub', 'https://www.farmap.com.au/support-hub'], ['What\'s new (Oct 2026)', 'https://www.farmap.com.au/news/32/42/Whats-New-in-FARMap'], ['June 2026 updates', 'https://www.farmap.com.au/updates-June2026'], ['QA article', 'https://www.farmap.com.au/Transforming-QA-Management'], ['News index', 'https://www.farmap.com.au/news'], ['App Store', 'https://apps.apple.com/au/app/farmap/id1527212655'], ['NSW DPI AgTech Finder', 'https://www.agtech.dpi.nsw.gov.au/products/farmap'], ['Farm Online profile', 'https://www.farmonline.com.au/story/8947745/how-farmap-gps-mapping-is-transforming-australian-farms']],
+  base: 'Every feature on one plan: A$40/month inc GST, or A$36/month on a 12-month term. Unlimited users and farms.',
+  blurb: 'Victorian-built farm map and mob records app from a former beef and sheep farmer. Paddock and livestock treatments, QA reports, rainfall, tasks, offline on iOS, Android and web.',
+  SRC: {
+    hp: 'farmap.com.au (home)',
+    ft: 'farmap.com.au/features',
+    pr: 'farmap.com.au/pricing-signup',
+    sh: 'farmap.com.au/support-hub (guide, 4 videos, FAQs)',
+    wn: 'farmap.com.au "What\'s New in FARMap" (updated 30 Oct 2026)',
+    ju: 'farmap.com.au/updates-June2026',
+    qa: 'farmap.com.au/Transforming-QA-Management',
+    as: 'App Store listing and version history (1.7.8 to 2.1.1)',
+    dpi: 'NSW DPI AgTech Finder listing',
+    fo: 'Farm Online, "How FARMap GPS mapping is transforming Australian farms"',
+    nw: 'farmap.com.au/news (23 posts checked)',
+  },
+  price(c, FX, R) {
+    const g = 1 / 1.1;
+    return R(36 * 12 * g, 36 * 12 * g, 40 * 12 * g, ['flat-price'], 'Flat A$40/mo inc GST month to month, A$38 on 6 months, A$36 on 12 months. Unlimited users and farms, every feature. Low/Mid = 12-month term, High = month to month');
+  },
+  cells: [
+    /* 0 map moves */ ['N', '"Allocate livestock to mapped paddocks with a few taps" on phone, tablet or web. Tap rather than drag.', 'ft'],
+    /* 1 grazing history */ ['N', 'Grazed data shows how long each paddock has been grazed and since grazed, with saved comparison groups (1.8.0, 1.8.2).', 'as'],
+    /* 2 open gates */ ['G', 'Not found.', 'ft'],
+    /* 3 split/merge */ ['G', 'Not found.', 'ft'],
+    /* 4 offline map */ ['N', 'Works offline on iOS, Android and web and syncs when back in range.', 'sh'],
+    /* 5 reconciliation */ ['G', 'Not found. Mob numbers can be adjusted for deaths and missing, but no opening-to-closing report is described.', 'ju'],
+    /* 6 births/deaths */ ['H', 'Deaths and missing update mob numbers (June 2026); birthing records follow joining. Natural increase counts not described.', 'ju'],
+    /* 7 sales/purchases */ ['G', 'Not found.', 'ft'],
+    /* 8 classes/bulk */ ['H', 'Custom livestock categories and subcategories with icons (Oct 2026); breed, age and sex per mob. Bulk actions not described.', 'wn'],
+    /* 9 totals/SR graphs */ ['H', 'Livestock numbers by mob and category. No stocking rate graphs found.', 'ju'],
+    /* 10 individual */ ['G', 'Records are kept by mob.', 'as'],
+    /* 11 EID */ ['G', 'Not found.', 'ft'],
+    /* 12 lifetime */ ['G', 'Not found.', 'ft'],
+    /* 13 pedigree */ ['G', 'Sires are recorded against joinings only.', 'hp'],
+    /* 14 weights */ ['G', 'Not found.', 'ft'],
+    /* 15 scales */ ['G', 'Not found.', 'ft'],
+    /* 16 ADG */ ['G', 'Not found.', 'ft'],
+    /* 17 treatments */ ['N', 'Vaccinations, drenches and other treatments by mob or by paddock, with dose, batch and cost; several treatments in one entry (June 2026); treatment reminders.', 'ju'],
+    /* 18 WHP */ ['N', 'WHP recorded with each treatment; a sprayed paddock turns red on the map until stock can go back in. ESI not mentioned.', 'fo'],
+    /* 19 chem inventory */ ['H', 'Separate chemical and fertiliser inventories with quantity on hand (June and Oct 2026). Batch and expiry tracking not mentioned.', 'wn'],
+    /* 20 LPA */ ['N', 'PDF quality assurance reports from movement, treatment and paddock records, generated from any user\'s device. No named LPA template.', 'ft'],
+    /* 21 eNVD */ ['G', 'Not found.', 'qa'],
+    /* 22 sale from NVD */ ['G', 'Not found.', 'qa'],
+    /* 23 NLIS */ ['G', 'NLIS is mentioned as an industry body only; no NLIS functions found.', 'qa'],
+    /* 24 NLIS recon */ ['G', 'Not found.', 'qa'],
+    /* 25 biosecurity plan */ ['G', 'Not found.', 'ft'],
+    /* 26 audit trail */ ['H', 'Paddock treatment records name the applicator. A general who-did-what log isn\'t described.', 'as'],
+    /* 27 hazard map */ ['H', 'Paddocks, boundaries, water sources and infrastructure on the map. Hazards and exclusion zones aren\'t named.', 'ft'],
+    /* 28 adviser access */ ['H', 'Unlimited users means an agronomist or QA auditor can be given a login, but there are no scoped adviser or auditor accounts.', 'qa'],
+    /* 29 forward planner */ ['G', 'Mobs are allocated "based on pasture availability", but no forward plan is described.', 'ft'],
+    /* 30 target rest */ ['G', 'Not found.', 'ft'],
+    /* 31 SR vs capacity */ ['G', 'Not found.', 'ft'],
+    /* 32 plan to tasks */ ['G', 'Not found.', 'ft'],
+    /* 33 pasture cover */ ['G', 'Not found.', 'ft'],
+    /* 34 satellite */ ['G', 'Satellite imagery is the map base only.', 'hp'],
+    /* 35 feed budget */ ['G', 'Not found.', 'ft'],
+    /* 36 feed inventory */ ['H', 'Feed type, amount and method logged as feeding records. Feed on hand isn\'t described.', 'hp'],
+    /* 37 rainfall */ ['N', 'Rainfall charts per farm or district: monthly, annual and rolling 12-month totals and rain days (2026).', 'wn'],
+    /* 38 tanks */ ['G', 'Not found.', 'ft'],
+    /* 39 weather/soil */ ['G', 'Not found.', 'ft'],
+    /* 40 virtual fence */ ['G', '', ''],
+    /* 41 location */ ['G', '', ''],
+    /* 42 sowing */ ['N', 'Paddock records hold when a paddock was sown or locked up; seeding reminders.', 'fo'],
+    /* 43 spray log */ ['N', 'Chemical name, batch, wind speed and direction and applicator on every paddock treatment; fertiliser applications.', 'as'],
+    /* 44 harvest */ ['G', 'Not found.', 'ft'],
+    /* 45 crop GM */ ['G', 'Not found.', 'ft'],
+    /* 46 agronomy */ ['G', 'No integrations found.', 'ft'],
+    /* 47 income/expense */ ['G', 'Costs are recorded on treatments only; no income or expense tracking.', 'hp'],
+    /* 48 accounting */ ['G', 'Not found.', 'ft'],
+    /* 49 GM */ ['G', 'Not found.', 'ft'],
+    /* 50 multi-property */ ['N', 'Multiple farms per subscription; a customer runs five properties on one flat price.', 'hp'],
+    /* 51 consolidated */ ['U', 'Reports across farms aren\'t described; there\'s no help centre to confirm.', 'sh'],
+    /* 52 no per-property fee */ ['N', 'Unlimited farms on the flat price.', 'dpi'],
+    /* 53 tasks */ ['N', 'Task list to allocate work to staff, custom reminders for stock, pasture and maintenance, with email alerts (1.8.4).', 'ft'],
+    /* 54 geo tasks */ ['H', 'Paddock tasks attach to a paddock on the map. No free-placed pins.', 'as'],
+    /* 55 roles */ ['G', 'Not found. Everyone on the subscription sees the same records.', 'ft'],
+    /* 56 offline */ ['N', 'Records offline, then edit, delete or save on sync.', 'ft'],
+    /* 57 unlimited users */ ['N', '"No extra fees for additional users."', 'pr'],
+    /* 58 joining */ ['N', 'Joining dates and sires, with calving or lambing dates calculated automatically.', 'hp'],
+    /* 59 preg scan */ ['G', 'Not found.', 'ft'],
+    /* 60 calving/weaning */ ['H', 'Calving and lambing schedules and birthing records. Marking and weaning counts not described.', 'ft'],
+    /* 61 marketplace */ ['G', 'Not found.', 'ft'],
+    /* 62 kill sheet */ ['G', 'Not found.', 'ft'],
+  ],
+  profile: `### FARMap (AU)
+
+**What it is.** A farm map and mob records app built by Sam Baulch, a former Hawkesdale, Victoria beef and sheep farmer who ran Australian Mapping (400+ farms professionally mapped) before launching FARMap around 2021 to 2023. Farmers draw paddocks on satellite imagery or load a professional map, allocate mobs to paddocks, and record livestock and paddock treatments, feeding, joinings, rainfall and tasks. It runs on iOS, Android and web, works offline, and is pitched at family farms on simplicity. Rural press places users across SA, Victoria, NSW and Queensland. No customer count is published.
+
+**Pricing (AUD inc GST).** One plan with everything: A$40/month, A$38 on a 6-month term, A$36 on a 12-month term (A$432/year). Unlimited users and unlimited farms, 14-day trial, no lock-in.
+
+**How it covers the jobs.** Its strengths are mapping, moves, grazing duration, treatments with batch and WHP, and spray records with wind and applicator details. Sprayed paddocks turn red on the map until clear. It also has QA reports in PDF, rainfall charts per farm, tasks with email reminders, and chemical and fertiliser inventories. It's fast-moving: 2026 brought multiple treatments per entry, livestock numbers, categories, inventories and rainfall charts. It has no individual animals, weights, NLIS or NVD, finance, grazing plan or pasture measurement, and no roles or permissions.
+
+**What it means for Mobble.** This is Mobble's closest like-for-like: same map-first, mob-based model, same family-farm audience, same compliance-records pitch. FARMap is behind on depth (reconciliation, sales and purchases, open gates, roles, integrations) and its price never moves. It matches Mobble's smallest Core band (about A$390 a year ex GST), is half to a third of Core for mid-size herds, and about a quarter of Mobble's Team plan for a 1,000 cattle and 5,000 sheep operation. Mobble needs a crisp answer to "why does my bill grow with my herd when FARMap's doesn't". The best answers today are stock reconciliation, mob splits and merges, permissions, Agworld and sensor integrations, and the depth of its compliance help content.
+
+**Evidence gaps.** The support hub is a set-up guide, four videos and an FAQ. Ratings draw on the feature and pricing pages, two 2026 release posts, App Store release notes, the NSW DPI AgTech Finder listing and Farm Online coverage. Cross-farm reporting is unconfirmed.
+`,
+});
+
+;
+// Resolution (resolutionapp.co.nz). Researched 10 Nov 2026 from home, pricing, about, help centre (Records, Tasks, Settings, User Permissions, Reports, Tips) and ANZ newsroom / Rural News / Farmers Weekly UK coverage.
+ANZ.add({
+  id: 'resolution', name: 'Resolution', kind: 'Adjacent (farm diary, tasks, compliance)', cur: 'NZD (quote)', species: 'both', region: 'NZ',
+  color: '#20b2aa',
+  noChart: true, chartNote: 'quote only',
+  angle: 'Competes for the "one place for the farm team" slot in NZ, not for livestock recording: records are free text with tags, with no stock logic',
+  links: [['Home', 'https://www.resolutionapp.co.nz/'], ['Pricing', 'https://www.resolutionapp.co.nz/pricing'], ['About', 'https://www.resolutionapp.co.nz/about-us'], ['Help centre', 'https://support.resolutionapp.co.nz/'], ['Create a record', 'https://support.resolutionapp.co.nz/records/create-a-record'], ['User permissions', 'https://support.resolutionapp.co.nz/users/user-permissions'], ['Reports', 'https://support.resolutionapp.co.nz/records/how-to-create-reports-and-print-them-records'], ['ANZ newsroom profile (May 2026)', 'https://www.anz.com.au/newsroom/new-zealand/2026/04/kiwi-farm-software-resolution-growing-like-spring-grass/'], ['Farmers Weekly UK (Cereals 2025)', 'https://www.fwi.co.uk/arable/crop-management/cereals-2025-new-zealand-farming-app-expands-into-uk-markets']],
+  base: 'One subscription with every feature, unlimited users and data. Price is quoted per farm after a demo, plus an onboarding fee; billed annually.',
+  blurb: 'NZ farm records, tasks, map layers, timesheets and team chat on one timeline. Built by Southland farmers, launched 2019, "thousands of users", now selling in the UK and Australia.',
+  SRC: {
+    hp: 'resolutionapp.co.nz (home)',
+    pr: 'resolutionapp.co.nz/pricing',
+    ab: 'resolutionapp.co.nz/about-us',
+    cr: 'support.resolutionapp.co.nz/records/create-a-record',
+    rp: 'support.resolutionapp.co.nz reports article',
+    up: 'support.resolutionapp.co.nz/users/user-permissions',
+    hc: 'support.resolutionapp.co.nz (10 collections checked)',
+    anz: 'ANZ newsroom, "Kiwi farm software Resolution growing like spring grass" (May 2026)',
+    fwi: 'Farmers Weekly UK, Cereals 2025',
+  },
+  price(c, FX, R) {
+    return R(null, null, null, ['quote-only'], 'Quote only: "tailored to your farm", annual subscription plus an onboarding fee (3-month programme). Unlimited users, no free trial');
+  },
+  cells: [
+    /* 0 map moves */ ['G', 'No mob objects. A move can be written up as a record tagged with the stock class and attached to paddocks.', 'cr'],
+    /* 1 grazing history */ ['G', 'Records filter by paddock, but days grazed and rested aren\'t counted.', 'rp'],
+    /* 2 open gates */ ['G', 'Not found.', 'hc'],
+    /* 3 split/merge */ ['G', 'Not found.', 'hc'],
+    /* 4 offline map */ ['H', 'Maps, GPS location and record entry work offline, but moves are free-text records.', 'hp'],
+    /* 5 reconciliation */ ['G', 'Stock records are free text with tags; "no structured fields for mob, stock class, numbers".', 'cr'],
+    /* 6 births/deaths */ ['G', 'Free-text records only.', 'cr'],
+    /* 7 sales/purchases */ ['G', 'Free-text records only.', 'cr'],
+    /* 8 classes/bulk */ ['G', 'Stock classes exist only as tags (e.g. "Lambs").', 'cr'],
+    /* 9 totals */ ['G', 'Not found.', 'hc'],
+    /* 10 individual */ ['G', 'Not found.', 'hc'],
+    /* 11 EID */ ['G', 'Not found.', 'hc'],
+    /* 12 lifetime */ ['G', 'Not found.', 'hc'],
+    /* 13 pedigree */ ['G', 'Not found.', 'hc'],
+    /* 14 weights */ ['G', 'Not found.', 'hc'],
+    /* 15 scales */ ['G', 'Not found.', 'hc'],
+    /* 16 ADG */ ['G', 'Not found.', 'hc'],
+    /* 17 treatments */ ['H', 'Drench and vaccination records as tagged free text, with label photos for batch and expiry and a reminder for the next dose.', 'cr'],
+    /* 18 WHP */ ['G', 'No WHP field; the help article suggests writing it in the record text.', 'cr'],
+    /* 19 inventory */ ['H', 'Inventory is listed as a record type, but entries are free-form with no stock levels.', 'hp'],
+    /* 20 LPA */ ['G', 'NZ product. Compliance reports are filtered record timelines in PDF or Word, with no LPA or NZFAP template.', 'rp'],
+    /* 21 eNVD */ ['G', 'Not found.', 'hc'],
+    /* 22 sale from NVD */ ['G', 'Not found.', 'hc'],
+    /* 23 NAIT */ ['G', 'No NAIT or NLIS functions found.', 'hc'],
+    /* 24 NLIS recon */ ['G', 'Not found.', 'hc'],
+    /* 25 biosecurity plan */ ['G', 'Not found. SOP capture and health and safety records are the nearest.', 'hp'],
+    /* 26 audit trail */ ['N', 'Every record and task sits on a central timeline with author, date and comments, filterable by person.', 'rp'],
+    /* 27 hazard map */ ['N', 'Map layers for hazards, environmental areas, water schemes, weeds, power, lead-outs, winter grazing, infrastructure, fertiliser and effluent, and irrigation.', 'hp'],
+    /* 28 adviser access */ ['N', 'Unlimited users with permissions per farm; advisers and auditors are given access.', 'anz'],
+    /* 29 forward planner */ ['G', 'Not found. A winter-grazing layer maps areas for environmental rules, not a rotation.', 'hp'],
+    /* 30 target rest */ ['G', 'Not found.', 'hc'],
+    /* 31 SR vs capacity */ ['G', 'Not found.', 'hc'],
+    /* 32 plan to tasks */ ['G', 'Records and tasks can be converted into each other, but there is no grazing plan.', 'hc'],
+    /* 33 pasture cover */ ['G', 'Not found.', 'hc'],
+    /* 34 satellite */ ['G', 'Not found.', 'hc'],
+    /* 35 feed budget */ ['G', 'Not found.', 'hc'],
+    /* 36 feed inventory */ ['H', 'Inventory records can cover feed, as free-form entries.', 'hp'],
+    /* 37 rainfall */ ['G', 'Not found.', 'hc'],
+    /* 38 tanks */ ['G', 'Not found.', 'hc'],
+    /* 39 weather/soil */ ['G', 'Not found.', 'hc'],
+    /* 40 virtual fence */ ['G', '', ''],
+    /* 41 location */ ['G', '', ''],
+    /* 42 sowing */ ['H', 'Paddock records tagged by activity, dated and attached to paddocks; used on arable farms. No structured crop fields.', 'cr'],
+    /* 43 spray log */ ['H', 'Paddock records with product photos and a fertiliser and effluent map layer; reminders for spray dates. No rate or WHP fields.', 'fwi'],
+    /* 44 harvest */ ['H', 'Free-text paddock records only.', 'cr'],
+    /* 45 crop GM */ ['G', 'Not found.', 'hc'],
+    /* 46 agronomy */ ['G', 'No integrations listed.', 'hp'],
+    /* 47 income/expense */ ['G', 'Not found.', 'hc'],
+    /* 48 accounting */ ['G', 'Not found. Timesheets export to PDF or CSV for payroll.', 'hp'],
+    /* 49 GM */ ['G', 'Not found.', 'hc'],
+    /* 50 multi-property */ ['N', 'One login for several farms, with switching, shared team access and copying records between farms.', 'hp'],
+    /* 51 consolidated */ ['G', 'Reports run per farm; no cross-farm report found.', 'rp'],
+    /* 52 no per-property fee */ ['U', 'Pricing is quoted per farm; whether extra farms cost more isn\'t published.', 'pr'],
+    /* 53 tasks */ ['N', 'Create and assign tasks with reminders, comments and attachments; personal task lists; contractor instructions.', 'hp'],
+    /* 54 geo tasks */ ['N', 'Points, lines and areas drawn on the map attach to tasks and records.', 'cr'],
+    /* 55 roles */ ['N', 'Per-farm permissions across farm access, records (read, create), tasks, timesheets (create, approve) and chat.', 'up'],
+    /* 56 offline */ ['N', 'View and create records and tasks offline, with auto-sync.', 'hp'],
+    /* 57 unlimited users */ ['N', '"No per-user fees", unlimited users and storage.', 'pr'],
+    /* 58 joining */ ['G', 'Not found.', 'hc'],
+    /* 59 preg scan */ ['G', 'Not found.', 'hc'],
+    /* 60 calving */ ['G', 'Not found.', 'hc'],
+    /* 61 marketplace */ ['G', 'Not found.', 'hc'],
+    /* 62 kill sheet */ ['G', 'Not found.', 'hc'],
+  ],
+  profile: `### Resolution (NZ)
+
+**What it is.** A farm records and team platform from New Zealand. It grew out of a Te Anau Basin record-keeping tool, and four farmers and two developers launched it publicly in late 2019 with 100 founding farms in Otago, Southland and Canterbury. It now has 40 staff, "thousands of users" and growth mostly by word of mouth, with first customers in Australia and the UK. Everything sits on one timeline and an interactive map: tagged records with photos, video, voice and documents, tasks, timesheets for payroll, team chat, and map layers for hazards, environmental areas, winter grazing, water, effluent and irrigation.
+
+**Pricing.** Quote only, "tailored to your farm", with an onboarding fee that buys a three-month programme with a support specialist. It's billed annually. Unlimited users and data, no per-user fees and no free trial.
+
+**How it covers the jobs.** It's strong where the job is the farm team rather than the stock: an audit trail, hazard and environmental mapping, adviser and auditor access, tasks pinned to the map, granular permissions, offline use and multiple farms. Livestock is the gap. Stock, treatment and paddock entries are free text classified by tags, with no mob numbers, reconciliation, WHP calculation, NAIT, weights or breeding.
+
+**What it means for Mobble.** Resolution isn't a stock-recording rival, but it competes for the same "one app the whole farm uses" position in NZ. Its health and safety, environmental compliance, timesheets and chat are jobs Mobble doesn't touch. A NZ sheep and beef farmer could pick Resolution as the team hub and run stock numbers in FarmIQ or a spreadsheet. For Mobble that's a positioning question rather than a feature gap: lead with livestock depth in NZ, and watch whether Resolution adds structured stock records.
+
+**Evidence gaps.** Help-centre collections list article titles; only the record, permissions and reports articles were read in full. No price is published anywhere.
+`,
+});
+
+;
+// Trev (mytrev.com, formerly also Cloud Farmer). Researched 10 Nov 2026 from pricing, home, features, help centre (stock, animal health, land, supplements, Foresight, integrations, release notes). trev.co.nz blocks fetching; mytrev.com is the live site.
+ANZ.add({
+  id: 'trev', name: 'Trev', kind: 'Direct (NZ weekly farm reporting)', cur: 'NZD ex GST', species: 'both', region: 'NZ',
+  color: '#4169e1',
+  star: 'Free "Notebook" tier offered',
+  angle: 'A NZ reporting layer over stock, pasture and feed, strongest in dairy. Competes with FarmIQ more than Mobble; its API and Figured link make it a possible partner in NZ',
+  links: [['Pricing', 'https://www.mytrev.com/pricing/'], ['Home', 'https://www.mytrev.com/'], ['Features', 'https://www.mytrev.com/features/'], ['Help centre', 'https://intercom.help/mytrev/en/'], ['Reconcile stock', 'https://intercom.help/mytrev/en/articles/3423794-how-do-i-reconcile-my-stock'], ['Stock module', 'https://intercom.help/mytrev/en/articles/4571562-how-do-i-complete-the-stock-module'], ['Mob management changes (Sep 2026)', 'https://intercom.help/mytrev/en/articles/17046379-what-s-changed-in-mob-management'], ['Animal health in the app', 'https://intercom.help/mytrev/en/articles/16533432-how-do-i-record-animal-health-treatments-in-the-trev-app'], ['Grazing events', 'https://intercom.help/mytrev/en/articles/16968432-how-do-i-record-a-grazing-event'], ['Rotation planner', 'https://intercom.help/mytrev/en/articles/16533570-how-do-i-create-a-rotation-plan'], ['Integrations', 'https://intercom.help/mytrev/en/collections/3421537-integrations'], ['October 2026 release notes', 'https://intercom.help/mytrev/en/articles/18275776-what-s-new-in-trev-october-2026'], ['Figured on Trev', 'https://www.figured.com/trev']],
+  base: 'Included in free Trev Notebook (eligible NZ dairy and red meat farms). Essential (NZ$920 per farm per year) adds dashboards, reports, budgets and access levels; Pro (NZ$1,550) adds integrations and triggers.',
+  blurb: 'NZ weekly farm reporting (stock, pasture, feed, nutrients, animal health) with dashboards, targets and benchmarking. Owns Cloud Farmer; integrates Figured, MINDA, Gallagher, Datamars and Fonterra.',
+  SRC: {
+    pr: 'mytrev.com/pricing',
+    hp: 'mytrev.com (home)',
+    ft: 'mytrev.com/features',
+    nb: 'Trev help: How does Notebook work?',
+    rc: 'Trev help: How do I reconcile my stock?',
+    sm: 'Trev help: Stock module (14 articles)',
+    mm: 'Trev help: What\'s changed in Mob Management? (22 Sep 2026)',
+    ah: 'Trev help: Animal health treatments in the Trev app',
+    gz: 'Trev help: How do I record a grazing event?',
+    ro: 'Trev help: Rotation Planner (Foresight, beta)',
+    rs: 'Trev help: search "rotation plan" results',
+    ig: 'Trev help: Integrations (Fonterra, MINDA, Gallagher, Figured, Datamars, API)',
+    on: 'Trev help: What\'s New in Trev, October 2026',
+    hc: 'Trev help centre (11 collections checked)',
+    fg: 'figured.com/trev',
+  },
+  price(c, FX, R) {
+    const n = c.props, f = FX.nzd;
+    const ess = (920 + 250 / 3) * n * f, proM = (140 * 12 + 250) * n * f;
+    const essB = 920 * n * f;
+    return R(essB, ess, proM, ['NZ-focused', 'per-farm'], 'NZD ex GST per farm: Essential NZ$920/yr, Pro NZ$1,550/yr or NZ$140/mo, NZ$250 onboarding per farm for paid plans; a free Notebook tier is also offered. Low = Essential, Mid = Essential with onboarding over 3 yrs, High = Pro monthly with onboarding in year 1');
+  },
+  cells: [
+    /* 0 map moves */ ['H', 'Grazing events link a mob to paddocks set up on the farm map, and events show in map and calendar views. No moving mobs on the map.', 'gz'],
+    /* 1 grazing history */ ['H', 'Grazing events record pre- and post-graze cover and calculate pasture consumed. Days grazed and rested aren\'t described.', 'gz'],
+    /* 2 open gates */ ['N', '"A grazing event records a mob grazing one or more paddocks."', 'gz'],
+    /* 3 split/merge */ ['G', 'Not found in the stock or mob management articles.', 'mm'],
+    /* 4 offline */ ['H', 'The iOS and Android app records offline and shows map layers; grazing events on the move aren\'t described.', 'pr'],
+    /* 5 reconciliation */ ['N', 'Weekly livestock reconciliation from opening stock and events; mob totals must match, and mismatch alerts break down by stock class (Sep 2026).', 'rc'],
+    /* 6 births/deaths */ ['N', 'Young stock, calving and deaths as livestock events.', 'sm'],
+    /* 7 sales/purchases */ ['N', 'Purchases, sales, transfers to external graziers and automated inter-farm transfers.', 'sm'],
+    /* 8 classes/bulk */ ['N', 'Class Change events and auto ageing.', 'sm'],
+    /* 9 totals/graphs */ ['P', 'Standardised dashboards and reports from Essential; Dashboard Builder charts and tables (Oct 2026).', 'pr'],
+    /* 10 individual */ ['I', 'Individual animal records come in from MINDA (LIC, dairy) and Datamars Livestock. Trev itself reports by mob, though treatments can target named animals.', 'ig'],
+    /* 11 EID */ ['I', 'Through the Datamars Livestock integration.', 'ig'],
+    /* 12 lifetime */ ['G', 'Not in Trev; individual histories stay in MINDA or Datamars.', 'ig'],
+    /* 13 pedigree */ ['G', 'Not found.', 'hc'],
+    /* 14 weights */ ['N', 'Weights module in data capture.', 'hc'],
+    /* 15 scales */ ['I', 'Gallagher and Datamars Livestock integrations; "industry integrations" are a Pro feature.', 'ig'],
+    /* 16 ADG */ ['H', 'Weights feed KPI charts and targets (Essential up). ADG and sale-date forecasts aren\'t documented.', 'ft'],
+    /* 17 treatments */ ['N', 'Treat all animals, a mob or named animals; product defaults fill dose rate and frequency; each dose is confirmed with date and batch. Works offline.', 'ah'],
+    /* 18 WHP */ ['N', 'Milk and meat withholding periods are part of each treatment record, from product defaults or custom entry.', 'ah'],
+    /* 19 medicine inventory */ ['N', 'Medicine cabinet by batch with remaining amount and expiry; doses are deducted automatically; filters for expired and disposed.', 'ah'],
+    /* 20 LPA */ ['G', 'NZ product. A compliance module covers NZ programmes; there\'s no LPA reporting.', 'ft'],
+    /* 21 eNVD */ ['G', 'Not applicable in NZ and not found.', 'hc'],
+    /* 22 sale from NVD */ ['G', 'Not found.', 'hc'],
+    /* 23 NAIT */ ['G', 'No NAIT integration among the six listed.', 'ig'],
+    /* 24 NLIS recon */ ['G', 'Not found.', 'hc'],
+    /* 25 biosecurity plan */ ['G', 'Not found.', 'hc'],
+    /* 26 audit trail */ ['H', 'Events carry who and when, and each mob shows opened, edited or signed-off status in the weekly report. A full change log isn\'t described.', 'mm'],
+    /* 27 hazard map */ ['H', 'Farm map with paddocks and layers, plus health and safety and compliance modules. Hazard layers aren\'t named.', 'ft'],
+    /* 28 adviser access */ ['N', 'Share reports or invite others with farm access levels; Figured shares the same livestock numbers with the accountant.', 'ft'],
+    /* 29 forward planner */ ['P', 'Rotation Planner builds a day-by-day grazing plan from round lengths and area exclusions. Part of Foresight, which must be in the subscription; in beta.', 'ro'],
+    /* 30 target rest */ ['P', 'Start and end round lengths in days drive the area to feed each day (Foresight).', 'ro'],
+    /* 31 SR vs capacity */ ['H', 'Round length and percentage of farm out of rotation are calculated. No carrying-capacity comparison found.', 'rs'],
+    /* 32 plan vs actual */ ['P', 'Track daily grazing targets and compare actual on-farm activity with the rotation plan (Foresight).', 'rs'],
+    /* 33 pasture cover */ ['N', 'Pasture walks log paddock covers; post-graze cover becomes the next pre-graze cover.', 'nb'],
+    /* 34 satellite */ ['G', 'Not found.', 'hc'],
+    /* 35 feed budget */ ['H', 'Pasture walks "help manage the feed budget", feeding levels in kgDM/head/day and consumed feed. No forward supply-demand budget found.', 'mm'],
+    /* 36 feed inventory */ ['H', 'Feed events and feeding levels per mob. Feed on hand isn\'t described.', 'hc'],
+    /* 37 rainfall */ ['U', 'An Environment module exists (one help article, no detail) and diary notes hold weather observations.', 'nb'],
+    /* 38 tanks */ ['G', 'Not found.', 'hc'],
+    /* 39 weather/soil */ ['G', 'Not found.', 'hc'],
+    /* 40 virtual fence */ ['G', '', ''],
+    /* 41 location */ ['G', '', ''],
+    /* 42 sowing */ ['H', 'Land events and named land-use areas such as "Back Block Turnips" (Oct 2026). No sowing detail fields described.', 'on'],
+    /* 43 spray log */ ['H', 'Fertiliser module and nutrient events. Chemical spray records aren\'t described.', 'nb'],
+    /* 44 harvest */ ['G', 'Not found.', 'hc'],
+    /* 45 crop GM */ ['G', 'Not found.', 'hc'],
+    /* 46 agronomy */ ['G', 'Not found.', 'ig'],
+    /* 47 income/expense */ ['P', 'Budget tracking from Essential; financial actuals come through Figured.', 'pr'],
+    /* 48 accounting */ ['I', 'Figured integration, which carries Xero actuals.', 'fg'],
+    /* 49 GM */ ['I', 'Figured adds the financial layer on Trev\'s livestock numbers.', 'fg'],
+    /* 50 multi-property */ ['N', 'Multiple farms under one login, with automated inter-farm transfers.', 'ft'],
+    /* 51 consolidated */ ['P', 'Multi-farm dashboard and intra-company benchmarking from Essential; centralised reporting across plans in Enterprise.', 'pr'],
+    /* 52 no per-property fee */ ['G', 'Every plan is priced per farm, plus NZ$250 onboarding per farm.', 'pr'],
+    /* 53 tasks */ ['N', 'Team task management in free Notebook.', 'nb'],
+    /* 54 geo tasks */ ['U', 'Events show on a map view; whether tasks can be pinned isn\'t documented.', 'nb'],
+    /* 55 roles */ ['P', 'Role-based farm access levels from Essential.', 'pr'],
+    /* 56 offline */ ['N', 'Offline syncing on web, iOS and Android.', 'pr'],
+    /* 57 unlimited users */ ['U', 'No user limits or user fees are listed on the pricing page.', 'pr'],
+    /* 58 joining */ ['N', 'Mating data: cows mated and inseminations, recorded cumulatively. Dairy-oriented.', 'sm'],
+    /* 59 preg scan */ ['G', 'Not found.', 'hc'],
+    /* 60 calving/weaning */ ['H', 'Calving recorded cumulatively by week and young stock recorded. Lambing, tailing and weaning not described.', 'sm'],
+    /* 61 marketplace */ ['G', 'Fonterra milk data for dairy only; no livestock market link.', 'ig'],
+    /* 62 kill sheet */ ['G', 'Not found.', 'ig'],
+  ],
+  profile: `### Trev (NZ)
+
+**What it is.** A New Zealand farm reporting platform launched in 2018. Farmers enter a week's events (stock, pasture walks, grazing, feed, nutrients, animal health) in 5 to 10 minutes, and Trev turns them into dashboards, targets, benchmarks and triggers. It bought Cloud Farmer, an early NZ farm diary app, in 2023, went looking for growth capital the same year, and has released a version for sheep, beef and deer farms. Its help centre and integrations (Fonterra, MINDA, round-length rotation planning) still lean heavily towards dairy.
+
+**Pricing (NZD ex GST, per farm).** Notebook is free for eligible NZ dairy and red meat farms and covers recording, tasks, maps, calendar and offline. Essential is NZ$920 a year or NZ$85 a month and adds dashboards, reports, budgets, intra-company benchmarking and role-based access. Pro is NZ$1,550 a year or NZ$140 a month and adds industry integrations, triggers, gap analysis and regional benchmarks. Enterprise is priced on application. Paid plans carry a one-off NZ$250 onboarding fee per farm.
+
+**How it covers the jobs.** It covers stock reconciliation well, with weekly mismatch alerts by class, and animal health is strong: product defaults with milk and meat WHP, batch-level medicine cabinet and offline dosing. It also has pasture covers, a beta rotation planner, Figured for finance, and Gallagher and Datamars for scale and EID data. It has no NAIT link, no LPA or NVD (it isn't sold in Australia), no spray records and no mob moves on a map.
+
+**What it means for Mobble.** Trev matters to Mobble only in New Zealand, where it competes with FarmIQ for the farm that wants numbers and benchmarks more than a paddock map. Its free Notebook for red meat farms is a low-cost entry point Mobble doesn't match in NZ. It's also a possible partner: Trev has a public API and already pairs with Figured, so a Mobble-to-Trev feed of mob numbers and treatments would let NZ farmers keep Mobble in the paddock and Trev in the office.
+
+**Evidence gaps.** trev.co.nz blocks automated fetching; mytrev.com and the Intercom help centre were used instead. Several collections list article titles only. Rainfall, map pins and user limits are unconfirmed.
+`,
+});
+
+;
+// Pasture.io (pasture.io, Hobart). Researched 10 Nov 2026 from plans, features, home and help centre (pricing, livestock, paddocks, people, integrations, Auto Grazer, user access).
+ANZ.add({
+  id: 'pastureio', name: 'Pasture.io', kind: 'Adjacent (pasture and grazing decisions)', cur: 'AUD inc GST', species: 'both', region: 'AU/NZ',
+  color: '#2e8b57',
+  angle: 'Partner, not rival: it covers Mobble\'s weakest grazing jobs (forward planner, feed budget, satellite covers) and keeps no livestock records',
+  links: [['Plans', 'https://pasture.io/plans'], ['Features', 'https://pasture.io/features'], ['Home', 'https://pasture.io/'], ['Help: price', 'https://help.pasture.io/what-is-the-price-or-what-is-the-cost'], ['Help: livestock and grazing', 'https://help.pasture.io/livestock'], ['Help: paddocks', 'https://help.pasture.io/paddocks'], ['Help: people and tasks', 'https://help.pasture.io/people'], ['Help: user access', 'https://help.pasture.io/how-to-change-user-access'], ['Help: Auto Grazer', 'https://help.pasture.io/how-auto-grazer-detects-grazing'], ['Help: integrations', 'https://help.pasture.io/integrations']],
+  base: 'Included in the Fundamental app (A$1,099 per farm per year inc GST, manual pasture readings). Satellite covers need the Essential (A$0.33/ha/month) or Ultimate (A$0.79/ha/month) add-on.',
+  blurb: 'Tasmanian pasture platform for dairy, beef and sheep: satellite and manual pasture covers, feed wedge, grazing planner, paddock activity records and the Pio AI assistant. Sold in AU, NZ, UK and US.',
+  SRC: {
+    pl: 'pasture.io/plans',
+    ft: 'pasture.io/features',
+    hp: 'pasture.io (home)',
+    hpr: 'help.pasture.io: What is the price?',
+    lv: 'help.pasture.io/livestock (20 articles)',
+    pd: 'help.pasture.io/paddocks (28 articles)',
+    pp: 'help.pasture.io/people',
+    ua: 'help.pasture.io: How to change user access',
+    ag: 'help.pasture.io: How Auto Grazer detects grazing',
+    ig: 'help.pasture.io/integrations',
+    hc: 'help.pasture.io (11 categories checked)',
+  },
+  price(c, FX, R) {
+    const g = 1 / 1.1, n = c.props;
+    const ha = (c.cattle * 8 + c.sheep * 1.5) / 10; // assumed grazing area at 10 DSE/ha
+    const base = 1099 * n;
+    return R(base * g, (base + 3.96 * ha) * g, (base + 9.48 * ha) * g, ['area-assumed', 'per-farm'], 'AUD inc GST divided by 1.1. Low = Fundamental app per farm (manual readings). Mid = plus Essential satellite (A$0.33/ha/mo), High = plus Ultimate (A$0.79/ha/mo), over an assumed grazing area of ' + Math.round(ha).toLocaleString('en-AU') + ' ha (DSE / 10)');
+  },
+  cells: [
+    /* 0 map moves */ ['H', 'Grazings put a herd into paddocks through feed slots, with herd markers on the map. Not drag-and-drop moves.', 'lv'],
+    /* 1 grazing history */ ['N', 'Days since grazed, fertilised, harvested or sprayed; individual paddock history; grazing rotation report.', 'ft'],
+    /* 2 open gates */ ['N', 'Graze several paddocks in one feed slot.', 'lv'],
+    /* 3 split/merge */ ['G', 'Not found.', 'lv'],
+    /* 4 offline */ ['U', 'Grazings can be saved on the phone; offline use isn\'t documented.', 'lv'],
+    /* 5 reconciliation */ ['G', 'Herds carry numbers only.', 'lv'],
+    /* 6 births/deaths */ ['G', 'Not found.', 'lv'],
+    /* 7 sales/purchases */ ['G', 'Not found.', 'lv'],
+    /* 8 classes/bulk */ ['G', 'Not found.', 'lv'],
+    /* 9 totals/SR */ ['H', 'Herd numbers drive a Pasture Demand Indicator. No stock totals or stocking rate graphs.', 'lv'],
+    /* 10 individual */ ['G', '', ''],
+    /* 11 EID */ ['G', '', ''],
+    /* 12 lifetime */ ['G', '', ''],
+    /* 13 pedigree */ ['G', '', ''],
+    /* 14 weights */ ['G', '', ''],
+    /* 15 scales */ ['G', '', ''],
+    /* 16 ADG */ ['G', '', ''],
+    /* 17 treatments */ ['G', 'No livestock treatment records.', 'lv'],
+    /* 18 WHP */ ['G', 'Fertiliser WHP only; no animal WHP.', 'pd'],
+    /* 19 medicine inventory */ ['G', 'Not found.', 'hc'],
+    /* 20 LPA */ ['G', 'Not found.', 'hc'],
+    /* 21 eNVD */ ['G', '', ''],
+    /* 22 sale from NVD */ ['G', '', ''],
+    /* 23 NLIS */ ['G', '', ''],
+    /* 24 NLIS recon */ ['G', '', ''],
+    /* 25 biosecurity */ ['G', 'Not found.', 'hc'],
+    /* 26 audit trail */ ['G', 'Not found.', 'hc'],
+    /* 27 hazard map */ ['G', 'Paddock topography and direction only.', 'pd'],
+    /* 28 adviser access */ ['H', 'A read-only Viewer role suits a consultant; there\'s no dedicated adviser account.', 'ua'],
+    /* 29 forward planner */ ['N', 'Grazing plans built from pasture available, days in paddock, manual order or a mix, with an Auto Plan that creates grazings.', 'ft'],
+    /* 30 target rest */ ['N', 'Leaf-stage timing and target grazing windows per paddock; "Pio Says Graze" ranks readiness on the map.', 'ft'],
+    /* 31 SR vs capacity */ ['N', 'Plan supply compared with herd demand, plus a Pasture Demand Indicator.', 'ft'],
+    /* 32 plan vs actual */ ['H', 'Auto Plan turns the plan into grazings and feed slots shift as feed changes. A plan-vs-actual report isn\'t described.', 'lv'],
+    /* 33 pasture cover */ ['N', 'Manual plate meter or farm walk readings in the Fundamental app.', 'pl'],
+    /* 34 satellite */ ['P', 'Essential: up to weekly Sentinel-2 flyovers at 10 m. Ultimate: near-daily Planet imagery at 3 m. Both are per-hectare add-ons with a cloudy-days model.', 'pl'],
+    /* 35 feed budget */ ['N', 'Predictive feed wedge with surplus and deficit, supply against demand, and 2-week forecasts on satellite plans.', 'ft'],
+    /* 36 feed inventory */ ['N', 'Feed and herd inventories in Fundamental, plus supplement and ration allocation in grazing plans.', 'pl'],
+    /* 37 rainfall */ ['G', 'Weather feeds Pio\'s models; no rain gauge records found.', 'ft'],
+    /* 38 tanks */ ['G', 'Not found.', 'hc'],
+    /* 39 weather/soil */ ['H', 'Weather stations and local weather feed the pasture models. No farm-owned station link.', 'hp'],
+    /* 40 virtual fence */ ['G', 'Auto Grazer reads collar location but doesn\'t control stock.', 'ag'],
+    /* 41 location */ ['I', 'Auto Grazer uses cow-tracker locations to record which paddock a herd grazed. Brands not named.', 'ag'],
+    /* 42 sowing */ ['N', 'Planting records on web and phone.', 'pd'],
+    /* 43 spray log */ ['N', 'Fertiliser records with presets, WHP and nutrient totals by element; chemical spray records; printable fert maps.', 'pd'],
+    /* 44 harvest */ ['N', 'Harvest records and forward planning of surplus paddocks for silage or hay.', 'pd'],
+    /* 45 crop GM */ ['H', 'Forage crop allocation and N response calculators. No crop gross margins.', 'ft'],
+    /* 46 agronomy */ ['I', 'Connects a Tabula account; what data flows isn\'t public.', 'ig'],
+    /* 47 income/expense */ ['G', 'Calculators estimate labour and operating-profit impact only.', 'ft'],
+    /* 48 accounting */ ['G', 'Not found.', 'ig'],
+    /* 49 GM */ ['G', 'Not found.', 'hc'],
+    /* 50 multi-property */ ['U', 'Each farm is priced separately; multi-farm accounts aren\'t documented.', 'pl'],
+    /* 51 consolidated */ ['U', 'Not documented.', 'hc'],
+    /* 52 no per-property fee */ ['G', 'Fundamental is priced per farm, and satellite per hectare.', 'pl'],
+    /* 53 tasks */ ['N', 'Task manager with tasks added from the map, lists or charts.', 'pp'],
+    /* 54 geo tasks */ ['N', 'Tasks show as icons on the map.', 'pp'],
+    /* 55 roles */ ['N', 'Owner, Administrator, Editor and read-only Viewer.', 'ua'],
+    /* 56 offline */ ['U', 'Not documented.', 'hc'],
+    /* 57 unlimited users */ ['N', 'Plans comparison lists unlimited users with no caps.', 'pl'],
+    /* 58 joining */ ['G', '', ''],
+    /* 59 preg scan */ ['G', '', ''],
+    /* 60 calving */ ['G', '', ''],
+    /* 61 marketplace */ ['G', '', ''],
+    /* 62 kill sheet */ ['G', '', ''],
+  ],
+  profile: `### Pasture.io (AU/NZ, partner candidate)
+
+**What it is.** A Hobart-based pasture and grazing decision platform for dairy, beef and sheep, sold in Australia, New Zealand, the UK and the US. It measures pasture cover and growth by satellite (or plate meter and farm walk), ranks paddocks on a feed wedge, builds grazing plans against herd demand, and records grazings, fertiliser, planting, spraying and harvest by paddock. Pio is its AI assistant, and Auto Grazer uses cow-tracker locations to log which paddock a herd grazed. It lists university partners and Tasmanian Export Award wins, but no customer count.
+
+**Pricing (AUD inc GST, annual contracts).** The Fundamental app is A$1,099 per farm per year (A$126 a month) with manual readings. Satellite comes as per-hectare add-ons: Essential at A$0.33/ha/month (up to weekly, 10 m) and Ultimate at A$0.79/ha/month (near daily, 3 m). Custom and lower-frequency plans are quoted. Satellite cost scales with area, so a 1,500 ha grazing block on Essential adds about A$6,000 a year.
+
+**How it covers the jobs.** It's the strongest product in the whole set on the grazing jobs: forward planner, target windows, supply against demand, pasture covers, satellite, feed wedge and paddock activity history. Paddock records for fertiliser, spray, planting and harvest are solid. It has no livestock records beyond herd numbers: no reconciliation, treatments, compliance, NLIS or breeding.
+
+**What it means for Mobble.** Pasture.io covers the grazing-plan and feed-budget jobs, where Mobble scores 25% each, and Mobble covers the stock, treatment and compliance records Pasture.io lacks. The overlap is thin (paddock records, tasks, map), so a two-way link would be complementary. Mobble's mobs and numbers would feed Pasture.io's demand calculation, and Pasture.io's covers and planned moves would show on Mobble's map. That's the same shape as Mobble's Agworld integration, and it gives Mobble an answer to Atlas and AgriWebb's grazing planners without building satellite pasture itself.
+
+**Evidence gaps.** Multi-farm accounts, offline use and integration detail (only Tabula is listed) aren't documented publicly.
+`,
+});
+
+;
+ANZ.apply(FEAT, MODEL);
+
+const SOURCES={"Mobble":["mobble.io/features","mobble.io/feature-spotlight/* (compliance, grazing, livestock, cropping)","mobble.io/integrations","mobble.io/pricing","Mobble PMF narrative (project doc)"],"AgriWebb":["agriwebb.com/pricing","agriwebb.com/feature-glossary","agriwebb.com/integrations","help.agriwebb.com (eNVD, NLIS Integration AU, Audits)","AU pricing calculator (agriwebb.com)"],"Atlas Grazing":["atlasag.com/atlasgrazing/pricing (calculator and feature comparison)","atlasag.com/atlasgrazing/features"],"FarmIQ":["farmiq-farmax.co.nz/packs","farmiq-farmax.co.nz/integrations","figured.com FarmIQ integration page","FarmIQ help centre (stock recording by pack)"],"Breedr":["breedr.co/pricing/cow-calf (US tiers and feature tooltips)","breedr.co/en-au"],"Halter":["halterhq.com/en-au/beef/packages","halterhq.com/en-us/beef/beef-packages","Halter Beef Pro launch release (30 Jun 2026)"],"Herdwatch":["herdwatch.com/price (calculator unresponsive)","herdwatch.com/all-features","herdwatch.com/en-uk/solutions/*","fitgap and Capterra plan summaries"],"StockBook":["outcross.com.au/stockbook","Stockhand app store listing","sheepgenetics.org.au software list","stockbook.com.au blocked in browser"],"AGDATA Phoenix":["agdata.com.au/pricing (builder)","agdata.com.au/solutions/production/livestock/breeders",".../mapping",".../cropping"],"CattleMax":["cattlemax.com/pricing (slider, all tiers)","cattlemax.com/pasture-management","cattlemax.com navigation (features list)"],"P2P Agri":["p2pagri.com.au/pricing","p2pagri.com.au/features","p2pagri.com.au/features/livestock-management","p2pagri.com.au/features/pasture-management","p2pagri.com.au/features/farm-mapping","p2pagri.com.au/features/crop-gross-margin","p2pagri.com.au/features/crop-marketing","p2pagri.com.au/features/rainfall-tracking","p2pagri.com.au/features/mobile-farm-management","p2pagri.com.au/features/adviser-collaboration","p2pagri.com.au/product-updates (2.0.0 to 2.5.0, Jun to Sep 2026)","p2pagri.com.au/resources (54 articles checked)"],"Livestock Library":["livestocklibrary.com.au/pricing","livestocklibrary.com.au (home)","livestocklibrary.com.au/features (live / on the way table)","livestocklibrary.com.au/platform/animals-mobs","livestocklibrary.com.au/platform/compliance-movements","livestocklibrary.com.au/platform/offline-field-app","livestocklibrary.com.au/platform/multi-property","livestocklibrary.com.au/platform/agistment","livestocklibrary.com.au/platform/the-books","livestocklibrary.com.au/platform/biosecurity","livestocklibrary.com.au/platform/health-treatments","livestocklibrary.com.au/platform/weights-performance","livestocklibrary.com.au/platform/jobs","livestocklibrary.com.au/platform/reproduction","livestocklibrary.com.au/platform/team","livestocklibrary.com.au/articles (398 research summaries, none on product)"],"FARMap":["farmap.com.au (home)","farmap.com.au/features","farmap.com.au/pricing-signup","farmap.com.au/support-hub (guide, 4 videos, FAQs)","farmap.com.au \"What's New in FARMap\" (updated 30 Oct 2026)","farmap.com.au/updates-June2026","farmap.com.au/Transforming-QA-Management","App Store listing and version history (1.7.8 to 2.1.1)","NSW DPI AgTech Finder listing","Farm Online, \"How FARMap GPS mapping is transforming Australian farms\"","farmap.com.au/news (23 posts checked)"],"Resolution":["resolutionapp.co.nz (home)","resolutionapp.co.nz/pricing","resolutionapp.co.nz/about-us","support.resolutionapp.co.nz/records/create-a-record","support.resolutionapp.co.nz reports article","support.resolutionapp.co.nz/users/user-permissions","support.resolutionapp.co.nz (10 collections checked)","ANZ newsroom, \"Kiwi farm software Resolution growing like spring grass\" (May 2026)","Farmers Weekly UK, Cereals 2025"],"Trev":["mytrev.com/pricing","mytrev.com (home)","mytrev.com/features","Trev help: How does Notebook work?","Trev help: How do I reconcile my stock?","Trev help: Stock module (14 articles)","Trev help: What's changed in Mob Management? (22 Sep 2026)","Trev help: Animal health treatments in the Trev app","Trev help: How do I record a grazing event?","Trev help: Rotation Planner (Foresight, beta)","Trev help: search \"rotation plan\" results","Trev help: Integrations (Fonterra, MINDA, Gallagher, Figured, Datamars, API)","Trev help: What's New in Trev, October 2026","Trev help centre (11 collections checked)","figured.com/trev"],"Pasture.io":["pasture.io/plans","pasture.io/features","pasture.io (home)","help.pasture.io: What is the price?","help.pasture.io/livestock (20 articles)","help.pasture.io/paddocks (28 articles)","help.pasture.io/people","help.pasture.io: How to change user access","help.pasture.io: How Auto Grazer detects grazing","help.pasture.io/integrations","help.pasture.io (11 categories checked)"]};const SOURCES2={"Mobble":["mobble.io/help (Individual Management, Compliance and Audits, Mob and Paddock Actions)","mobble.io/post (monthly news Mar to Nov 2026)"],"AgriWebb":["news.agriwebb.com (Movement Planning, planned moves on map)","help.agriwebb.com (birth and AI records)"],"Atlas Grazing":["help.grazing.atlasag.com (all collections)"],"FarmIQ":["help.farmiq.co.nz search","FarmIQ blog product updates (Jul to Oct 2026)"],"Breedr":["cs.breedr.co/us_help_center (all categories)"],"Halter":["halterhq.com/rural-professionals","halterhq.com/en-au/dairy/pricing","help.halter.io (login required)"],"Herdwatch":["help.herdwatch.com (11 collections)"],"StockBook":["kb.outcrosssystems.com.au (Stockbook knowledge base)"],"AGDATA Phoenix":["help.agdata.com.au/phoenix/11 (table of contents)"],"CattleMax":["help.cattlemax.com (account, herd, partner and reporting categories)","cattlemax.com/app"]};
+Chart.defaults.animation=false;
+const col={mobble:'#0b7a4b',agriwebb:'#e07b00',atlas:'#7a5cc4',farmiq:'#2a7bbf',breedr:'#c2457a',halter:'#8a6d3b',herdwatch:'#4a9e9e',stockbook:'#a34a4a',phoenix:'#5c6b73',cattlemax:'#b8a100',p2pagri:'#6b8e23',livestocklibrary:'#8b4513',farmap:'#d2691e',resolution:'#20b2aa',trev:'#4169e1',pastureio:'#2e8b57'};
+const $=id=>document.getElementById(id);
+const esc=x=>String(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const fm=x=>'$'+Math.round(x).toLocaleString('en-AU');const pv=x=>Math.max(x,20);const fz=x=>x==null?'Quote only':x<20?'Free':fm(x);
+const M=MODEL, LBL={N:'Native',P:'Paid tier / module / add-on',I:'Integration',H:'Partial',G:'Gap',U:'Not confirmable'};
+M.COHORTS.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;$('coh').appendChild(o)});
+$('fxu').value=M.FX.usd.toFixed(3);$('fxn').value=M.FX.nzd.toFixed(3);
+let ch={};
+function mk(id,cfg){if(ch[id])ch[id].destroy();ch[id]=new Chart($(id),cfg)}
+function draw(){
+ M.FX.usd=+$('fxu').value;M.FX.nzd=+$('fxn').value;M.setU(+$('uval').value);
+ const c=M.COHORTS.find(x=>x.id==$('coh').value),o=M.compute(c),b=$('basis').value,showH=$('hal').value=='1';
+ $('desc').textContent=c.users+' user(s), '+c.props+' propert'+(c.props>1?'ies':'y')+(c.ha?', '+c.ha.toLocaleString()+' ha crop':'')+'. Crop area changes no vendor price; it changes which products are viable.';
+ const vs=M.VENDORS.filter(v=>o[v.id]&&o[v.id].mid!=null&&!v.noChart&&(showH||v.id!='halter')).sort((a,z)=>o[a.id].mid-o[z.id].mid);
+ mk('c1',{type:'bar',data:{labels:vs.map(v=>v.name+(v.star?'*':'')),datasets:[{label:'Low to high',data:vs.map(v=>[pv(o[v.id].low),pv(o[v.id].high)]),backgroundColor:vs.map(v=>col[v.id]+'aa'),borderColor:vs.map(v=>col[v.id]),borderWidth:1,borderSkipped:false},
+  {type:'scatter',label:'Mid',data:vs.map((v,i)=>({x:pv(o[v.id].mid),y:i})),pointStyle:'rectRot',pointRadius:6,backgroundColor:'#000',borderColor:'#fff'}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{type:'logarithmic',title:{display:true,text:'AUD per year ex GST (log)'}}},plugins:{tooltip:{callbacks:{label:t=>t.dataset.label=='Mid'?'Mid '+fz(t.raw.x):'Range '+fz(t.raw[0])+' to '+fz(t.raw[1])}}}}});
+ mk('c2',{type:'scatter',data:{datasets:vs.map(v=>({label:v.name+(v.star?'*':''),data:[{x:pv(o[v.id][b]),y:o[v.id].value}],backgroundColor:col[v.id],pointRadius:v.id=='mobble'?12:8,pointStyle:v.id=='mobble'?'rect':'circle',borderColor:v.id=='mobble'?'#06402a':'transparent',borderWidth:v.id=='mobble'?3:0,order:v.id=='mobble'?0:1}))},
+  options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'logarithmic',title:{display:true,text:'AUD per year ex GST ('+b+' basis, log)'}},y:{min:0,max:100,title:{display:true,text:'JTBD coverage score (0-100)'}}},plugins:{tooltip:{callbacks:{label:t=>t.dataset.label+': '+fz(t.raw.x)+', score '+t.raw.y.toFixed(0)}}}}});
+ const all=M.COHORTS.map(k=>M.compute(k));
+ mk('c3',{type:'line',data:{labels:M.COHORTS.map(k=>k.name),datasets:M.VENDORS.filter(v=>!v.noChart&&(showH||v.id!='halter')).map(v=>({label:v.name+(v.star?'*':''),data:all.map(a=>a[v.id]&&a[v.id].mid!=null?pv(a[v.id].mid):null),borderColor:col[v.id],backgroundColor:col[v.id],borderWidth:v.id=='mobble'?4:1.5,pointRadius:v.id=='mobble'?4:2,spanGaps:false,segment:{borderColor:ctx=>[2,5,7,10].includes(ctx.p0DataIndex)?'transparent':undefined}}))},
+  options:{responsive:true,maintainAspectRatio:false,scales:{y:{type:'logarithmic',title:{display:true,text:'AUD per year ex GST (log)'}},x:{ticks:{maxRotation:60,minRotation:40,font:{size:10}}}}}});
+ let t='<table><tr><th>Vendor</th><th>Low</th><th>Mid</th><th>High</th><th>Score</th><th>Flags / basis</th></tr>';
+ M.VENDORS.forEach(v=>{const r=o[v.id];t+=r?'<tr class="'+(v.id=='mobble'?'mob':'')+'"><td>'+v.name+'</td><td>'+fz(r.low)+'</td><td>'+fz(r.mid)+'</td><td>'+fz(r.high)+'</td><td>'+r.value.toFixed(0)+'</td><td style="text-align:left">'+r.flags.join(', ')+(r.flags.length?' | ':'')+r.note+'</td></tr>':'<tr><td>'+v.name+'</td><td colspan=5 style="text-align:left;color:var(--mut)">Cannot serve this cohort</td></tr>'});
+ $('tbl').innerHTML=t+'</table>';
+ matrix();
+ cnotes();
+}
+function cnotes(){const s=M.VENDORS.filter(v=>v.star).map(v=>'* '+v.name+': '+v.star+'.'),x=M.VENDORS.filter(v=>v.noChart).map(v=>v.name+' ('+v.chartNote+')');const h=s.concat(x.length?['Not charted: '+x.join(', ')+'.']:[]).join(' ');document.querySelectorAll('.cnote').forEach(e=>{e.textContent=h;e.style.display=h?'':'none'})}
+const openJobs=new Set();
+const PTS={N:1,P:0.8,I:0.6,H:0.5,G:0};
+const fp=x=>String(+(+x).toFixed(2));
+function jobTip(v,vi,n,fs,r,p,uS){
+ const pt=k=>k=='U'?uS:PTS[k], cn=r.cnt, code=k=>k=='U'?'?':k;
+ const chip=k=>'<span class="'+k+'" style="padding:0 4px;border-radius:3px">'+code(k)+' '+fp(pt(k))+'</span> ';
+ const grp=(ks,title)=>{const xs=fs.filter(f=>ks.includes(f.r[vi]));return xs.length?'<br><b>'+title+' ('+xs.length+')</b><br>'+xs.map(f=>chip(f.r[vi])+esc(f.n)).join('<br>'):''};
+ const inc=cn.N+cn.P+cn.I, bits=[inc+' of '+fs.length+' features included'];
+ if(cn.H)bits.push(cn.H+' partial');if(cn.G)bits.push(cn.G+' missing');if(cn.U)bits.push(cn.U+' not confirmable');
+ const tot=fs.reduce((a,f)=>a+pt(f.r[vi]),0);
+ const lost=[], nf=(c,a,b)=>c+(c==1?' feature '+a+' scores ':' features '+b+' score ');
+ if(cn.P)lost.push(nf(cn.P,'on a paid tier','on a paid tier')+'0.8 instead of 1 (−'+fp(cn.P*0.2)+')');
+ if(cn.I)lost.push(nf(cn.I,'through an integration','through integrations')+'0.6 (−'+fp(cn.I*0.4)+')');
+ if(cn.H)lost.push(nf(cn.H,'only partly covered','only partly covered')+'0.5 (−'+fp(cn.H*0.5)+')');
+ if(cn.G)lost.push(nf(cn.G,'missing','missing')+'0 (−'+fp(cn.G)+')');
+ if(cn.U)lost.push(nf(cn.U,'not confirmable','not confirmable')+fp(uS)+' (−'+fp(cn.U*(1-uS))+')');
+ const ord=['N','P','I','H','G','U'], srt=fs.slice().sort((a,b)=>ord.indexOf(a.r[vi])-ord.indexOf(b.r[vi])), pl=x=>fp(x)+(x==1?' point':' points');
+ return '<b>'+esc(v.name)+': '+p+'% of “'+esc(n)+'”</b><br>'+bits.join(', ')+'.'
+  +grp('NPI','Included')+grp('H','Partial')+grp('G','Missing')+grp('U','Not confirmable')
+  +'<br><br><b>Score</b><br>'+srt.map(f=>fp(pt(f.r[vi]))).join(' + ')+' = '+pl(tot)+'<br>'+fp(tot)+' ÷ '+fs.length+' features = '+p+'%'
+  +(lost.length?'<br><br><b>Points lost: '+fp(fs.length-tot)+' of '+fs.length+'</b><br>'+lost.join('<br>'):'');
+}
+function matrix(){
+ const uS=+$('uval').value;
+ const js=FEAT.jobScores(M.JOBS.length,uS);
+ const order=M.JOBS.map((j,i)=>i).sort((a,b)=>M.JOBS[b][1]-M.JOBS[a][1]||a-b);
+ let t='<table><tr><th>Job / feature</th><th>Weight</th>'+M.VENDORS.map(v=>'<th class="tt'+(v.id=='mobble'?' mob':'')+(v.anz?' anz':'')+'" data-t="'+esc('<b>'+v.name+'</b> ('+v.region+', '+v.kind+')'+(v.blurb?'<br>'+v.blurb:'')+'<br><i>'+FEAT.BASE[v.id]+'</i>')+'">'+v.name+'</th>').join('')+'</tr>';
+ order.forEach(j=>{
+  const [n,w]=M.JOBS[j], fs=FEAT.F.filter(f=>f.j===j);
+  t+='<tr class="jrow'+(openJobs.has(j)?' open':'')+'" data-j="'+j+'"><td class="tt" data-t="'+esc('<b>'+n+'</b><br>'+DETAIL.JOBDESC[j]+'<br><i>'+fs.length+' features. Click to '+(openJobs.has(j)?'collapse':'expand')+'.</i>')+'"><span class="car">▸</span>'+n+' <span class="note">('+fs.length+' features)</span></td><td class="tt" data-t="'+esc('<b>Job weight '+w+' of 5</b><br>How much this job counts in the value score. The % cells ignore weight.')+'">'+w+'</td>';
+  M.VENDORS.forEach((v,vi)=>{const r=js[v.id][j],p=Math.round(r.s*100),cn=r.cnt;
+   const bg=p>=75?'#1b9e6b55':p>=50?'#1b9e6b2e':p>=25?'#e8a31740':'#d9534f33';
+   const tip=jobTip(v,vi,n,fs,r,p,uS);
+   t+='<td class="tt jc'+(v.id=='mobble'?' mobc':'')+'" style="background:'+bg+'" data-t="'+esc(tip)+'">'+p+'%'+(cn.P?'<span class="mk">$</span>':'')+(cn.I?'<span class="mk">⇄</span>':'')+'</td>'});
+  t+='</tr>';
+  fs.forEach(f=>{
+   t+='<tr class="frow f'+j+(openJobs.has(j)?' show':'')+'"><td class="tt" data-t="'+esc('<b>'+f.n+'</b><br>'+f.d)+'">'+f.n+'</td><td></td>';
+   M.VENDORS.forEach((v,vi)=>{const c=FEAT.cell(f,vi);const tip='<b>'+v.name+': '+LBL[c.k]+' ('+(c.k=='U'?fp(uS)+' points, set by the toggle above':fp(PTS[c.k])+(PTS[c.k]==1?' point':' points'))+')</b><br>'+esc(c.text)+(c.src?'<br><span style="opacity:.75">Source: '+esc(c.src)+'</span>':'')+(c.was!==c.k?'<br><span style="opacity:.75">Round 1 rating: '+(c.was=='U'?'?':c.was)+'</span>':'');t+='<td class="tt '+c.k+(v.id=='mobble'?' mobc':'')+'" data-t="'+esc(tip)+'">'+(c.k=='U'?'?':c.k)+'</td>'});
+   t+='</tr>';
+  });
+ });
+ $('mx').innerHTML=t+'</table>';
+}
+$('mx').addEventListener('click',e=>{const tr=e.target.closest('tr.jrow');if(!tr||!e.target.closest('td:first-child'))return;const j=+tr.dataset.j;
+ if(openJobs.has(j))openJobs.delete(j);else openJobs.add(j);
+ tr.classList.toggle('open');document.querySelectorAll('tr.f'+j).forEach(r=>r.classList.toggle('show'));});
+$('exp').onclick=()=>{M.JOBS.forEach((x,j)=>openJobs.add(j));document.querySelectorAll('tr.jrow').forEach(r=>r.classList.add('open'));document.querySelectorAll('tr.frow').forEach(r=>r.classList.add('show'))};
+$('col').onclick=()=>{openJobs.clear();document.querySelectorAll('tr.jrow').forEach(r=>r.classList.remove('open'));document.querySelectorAll('tr.frow').forEach(r=>r.classList.remove('show'))};
+const tip=document.createElement('div');tip.id='tip';document.body.appendChild(tip);
+$('mx').addEventListener('mousemove',e=>{const el=e.target.closest('.tt');if(!el){tip.style.display='none';return}tip.innerHTML=el.dataset.t;tip.style.display='block';
+ const x=Math.min(e.clientX+14,innerWidth-380);let y=e.clientY+16;const h=tip.offsetHeight;if(y+h>innerHeight-8)y=Math.max(8,e.clientY-h-12);tip.style.left=x+'px';tip.style.top=y+'px'});
+$('mx').addEventListener('mouseleave',()=>tip.style.display='none');
+$('src').innerHTML=Object.entries(SOURCES).map(([k,a])=>'<b>'+k+':</b> '+a.concat(SOURCES2[k]||[]).map(esc).join('; ')).join('<br>');
+['coh','basis','fxu','fxn','hal','uval'].forEach(i=>$(i).addEventListener('change',draw));
+$('coh').value='m1000';draw();
+</script></body></html>
